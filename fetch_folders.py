@@ -1,6 +1,6 @@
 import sys, os
 import json
-import folderfetcher
+from nuxeoextent import folderfetcher
 
 DEBUG = os.environ.get('DEBUG', False)
 if not DEBUG:

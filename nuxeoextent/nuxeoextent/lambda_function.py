@@ -2,7 +2,7 @@ import os
 import json
 import boto3
 
-from metadatafetcher import Fetcher
+from nuxeoextent import metadatafetcher
 
 DEBUG = os.environ.get('DEBUG', False)
 
@@ -10,7 +10,7 @@ def lambda_handler(payload, context):
     if DEBUG:
         payload = json.loads(payload)
 
-    fetcher = Fetcher(payload)
+    fetcher = metadatafetcher.Fetcher(payload)
     fetcher.fetch_page()
     next_page = fetcher.json()
 
