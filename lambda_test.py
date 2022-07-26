@@ -1,4 +1,4 @@
-from nuxeoextent import lambda_function
+from lambda_function import lambda_handler
 import json
 
 ucb_test = {
@@ -7,4 +7,4 @@ ucb_test = {
   "uid": "0067abd5-accb-4768-b0a9-e1de17c7c0da"
     }
 
-lambda_function.lambda_handler(json.dumps(ucb_test), {})
+lambda_handler(json.dumps(ucb_test), {})

@@ -22,6 +22,8 @@ campuses = [
     "UCSF",
 ]
 
+campuses = ["UCB"]
+
 def main():
     for campus in campuses:
 

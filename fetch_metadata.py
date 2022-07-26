@@ -2,7 +2,7 @@ import sys, os
 import argparse
 import json
 from nuxeoextent import folderfetcher
-from nuxeoextent import lambda_function
+from lambda_function import lambda_handler
 import boto3
 
 BUCKET = os.environ.get('S3_BUCKET')
@@ -46,7 +46,7 @@ def main(no_folder_refresh=False):
                 "uid": f"{folder['uid']}"
             }
             
-            lambda_function.lambda_handler(json.dumps(payload), {})
+            lambda_handler(json.dumps(payload), {})
 
 def get_folder_list(campus):
     key = f"{campus}/folders.json"
