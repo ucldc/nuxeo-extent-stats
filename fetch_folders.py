@@ -1,10 +1,6 @@
 import sys, os
 import json
-from nuxeoextent import folderfetcher
-
-DEBUG = os.environ.get('DEBUG', False)
-if not DEBUG:
-    import boto3
+import folderfetcher
 
 BUCKET = os.environ.get('S3_BUCKET')
 

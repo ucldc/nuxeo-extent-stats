@@ -1,8 +1,8 @@
 import sys, os
 import argparse
 import json
-from nuxeoextent import folderfetcher
-from lambda_function import lambda_handler
+import folderfetcher
+import metadatafetcher
 import boto3
 
 BUCKET = os.environ.get('S3_BUCKET')
@@ -37,26 +37,26 @@ def main(no_folder_refresh=False):
             folders = folderfetcher.fetch(campus_basepath, campus, 4)
         
         for folder in folders:
-            # fetch metadata
-            #print(f"{folder=}")
-            # launch metadatafetcher in lambda
-            payload = {
+            next_page = {
                 "campus": f"{campus}",
                 "path": f"{folder['path']}",
                 "uid": f"{folder['uid']}"
             }
-            
-            lambda_handler(json.dumps(payload), {})
+
+            while next_page:
+                fetcher = metadatafetcher.Fetcher(next_page)
+                fetcher.fetch_page()
+                next_page = fetcher.next_page()
 
 def get_folder_list(campus):
-    key = f"{campus}/folders.json"
+    key = f"metadata/{campus}/folders.json"
     s3_client = boto3.client('s3')
     response = s3_client.get_object(
         Bucket=BUCKET,
         Key=key
     )
 
-    return json.loads(response['Body'].read()) 
+    return json.loads(response['Body'].read())
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="fetch metadata for nuxeo extent stats reporting")

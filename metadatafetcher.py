@@ -2,13 +2,14 @@ import os
 import requests
 import urllib.parse
 import json
-import boto3
 
-LOCAL = os.environ.get('LOCAL', False)
+DEBUG = os.environ.get('DEBUG', False)
+if DEBUG is False:
+    import boto3
 
 NUXEO_TOKEN = os.environ.get('NUXEO_TOKEN')
-API_BASE = os.environ.get('NUXEO_API_BASE', 'https://nuxeo.cdlib.org/Nuxeo/site')
-API_PATH = os.environ.get('NUXEO_API_PATH', 'api/v1')
+API_BASE = os.environ.get('NUXEO_API_BASE', 'https://nuxeo.cdlib.org/Nuxeo/')
+API_PATH = os.environ.get('NUXEO_API_PATH', 'site/api/v1')
 BUCKET = os.environ.get('S3_BUCKET')
 
 CHILD_NXQL = "SELECT * FROM SampleCustomPicture, CustomFile, CustomVideo, CustomAudio, CustomThreeD " \
@@ -44,7 +45,7 @@ class Fetcher(object):
         records = self.get_records(response)
 
         if len(records) > 0:
-            if LOCAL:
+            if DEBUG is True:
                 self.fetchtolocal(records)
             else:
                 self.fetchtos3(records)
@@ -127,7 +128,7 @@ class Fetcher(object):
         f = open(filename, "w+")
 
         jsonl = "\n".join([json.dumps(record) for record in records])
-        #print(f"writing to {filename}")
+        print(f"writing to {filename}")
         f.write(jsonl)
         f.write("\n")
 
@@ -140,7 +141,7 @@ class Fetcher(object):
 
         jsonl = "\n".join([json.dumps(record) for record in records])
 
-        #print(f"loading to s3 bucket {BUCKET} with key {s3_key}")
+        print(f"loading to s3 bucket {BUCKET} with key {s3_key}")
         try:
             # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Client.put_object
             s3_client.put_object(
@@ -151,14 +152,15 @@ class Fetcher(object):
         except Exception as e:
             print(f"ERROR loading to S3: {e}")
 
-    def json(self):
+    def next_page(self):
+        ''' return json in case we ever want to run this in lambda '''
         if self.current_page_index == -1:
             return None
 
-        return json.dumps({
+        return {
             "campus": self.campus,
             "path": self.path,
             "uid": self.uid,
             "current_page_index": self.current_page_index,
             "write_page": self.write_page
-        })
+        }
