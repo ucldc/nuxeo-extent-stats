@@ -93,7 +93,7 @@ def get_records(http_resp):
     return documents, count
 
 def fetchtolocal(outdir, folders):    
-    outdir = f"{os.getcwd()}/metadata/{outdir}"
+    outdir = f"{os.getcwd()}/folders/{outdir}"
     
     if not os.path.exists(outdir):
         os.makedirs(outdir)
@@ -111,7 +111,7 @@ def fetchtos3(prefix, folders):
     s3_client = boto3.client('s3')
 
     body = json.dumps(folders)
-    key = f"metadata/{prefix}/folders.json"
+    key = f"folders/{prefix}/folders.json"
     print(f"loading to s3 bucket {BUCKET} with key {key}")
     try:
         # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Client.put_object

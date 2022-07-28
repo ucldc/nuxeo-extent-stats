@@ -1,35 +1,41 @@
-import sys, os
-import json
-import boto3
+import sys
 import argparse
+import extentreport
 
-'''
-    Create extent stats report for content in Nuxeo
-    based on prefetched metadata
-'''
+CAMPUSES = [
+    "UCB",
+    "UCD",
+    "UCI",
+    "UCLA",
+    "UCM",
+    "UCOP",
+    "UCR",
+    "UCSB",
+    "UCSC",
+    "UCSD",
+    "UCSF",
+]
 
-def main():
-    parser = argparse.ArgumentParser(description="create nuxeo extent stats report(s)")
-    top_folder = parser.add_mutually_exclusive_group(required=True)
-    top_folder.add_argument('--collection_id', help="registry collection ID")
-    top_folder.add_argument('--campus', help="campus")
-    parser.add_argument('--derivatives', default=False)
-    # s3_bucket
-    # outdir
+def main(params):
 
-    args = parser.parse_args()
-    print(args)
+    if params.all:
+        paths = [f"/asset-library/{campus}" for campus in CAMPUSES]
+    elif params.path:
+        paths = [params.path]
+    elif params.campus:
+        paths = [f"/asset-library/{params.campus}"]
 
-    if args.collection_id:
-        # get nuxeo path from registry
-        collections = [args.collection_id]
-    elif args.campus:
-        # get all collection IDs for a campus
-        # this means that everything needs to be set up in registry
-        # or do we create one folder on s3 for each subfolder beneath /asset-library/UC*?
-
-    
+    for path in paths:
+        extentreport.report(path)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    parser = argparse.ArgumentParser(description="create nuxeo extent stats report(s)")
+    top_folder = parser.add_mutually_exclusive_group(required=True)
+    top_folder.add_argument('--all', help="create reports for all campuses", action="store_true")
+    top_folder.add_argument('--path', help="nuxeo path for folder")
+    top_folder.add_argument('--campus', help="campus")
+    parser.add_argument('--derivatives', help="include derivatives in file count", default=True)
+
+    args = parser.parse_args()
+    sys.exit(main(args))

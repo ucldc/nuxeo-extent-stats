@@ -120,6 +120,7 @@ class Fetcher(object):
         nuxeo_path = self.path.lstrip(f'/asset-library/{self.campus}')
         nuxeo_path = nuxeo_path.strip()
         path = f"{os.getcwd()}/{self.campus}/{nuxeo_path}"
+        path = f"{os.getcwd()}/metadata/{self.campus}/{nuxeo_path}"
         
         if not os.path.exists(path):
             os.makedirs(path)
