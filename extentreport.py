@@ -5,16 +5,6 @@ import json
 BUCKET = os.environ.get('S3_BUCKET')
 
 def report(path):
-    # iterate over metadata stashed on S3 with prefix `path`
-    # each line in each jsonl file is an item
-    # for each doc: 
-        # parent or child (parent if parent is org; child if parent is doc)
-        # for each file:
-            # size
-            # type (content, aux, derivative)
-    # get total number of parents
-    # get total number of children
-    # get total number of files
     prefix = path.lstrip('/asset-library/')
     prefix = f"metadata/{prefix}"
 
@@ -26,6 +16,15 @@ def report(path):
     )
 
     doc_count = 0
+    main_count = 0
+    main_size = 0
+    aux_count = 0
+    aux_size = 0
+    deriv_count = 0
+    deriv_size = 0
+    total_count = 0
+    total_size = 0
+
     for page in pages:
 
         for item in page['Contents']:
@@ -45,9 +44,28 @@ def report(path):
 
                 extent = get_extent(doc)
 
-                print(f"{extent}")
+                #print(f"{extent}")
+                main_count = main_count + extent['main_count']
+                main_size = main_size + extent['main_size']
+                aux_count = aux_count + extent['aux_count']
+                aux_size = aux_size + extent['aux_size']
+                deriv_count = deriv_count + extent['deriv_count']
+                deriv_size = deriv_size + extent['deriv_size']
+                total_count = total_count + extent['total_count']
+                total_size = total_size + extent['total_size']
+
+                # TODO: deduplicate
 
     print(f"{doc_count=}")
+    print(f"{main_count=}")
+    print(f"{main_size=}")
+    print(f"{aux_count=}")
+    print(f"{aux_size=}")
+    print(f"{deriv_count=}")
+    print(f"{deriv_size=}")
+    print(f"{total_count=}")
+    print(f"{total_size=}")
+
 
 def get_extent(doc):
     extent = {
@@ -63,23 +81,83 @@ def get_extent(doc):
 
     properties = doc['properties']
 
-    if properties.get('file:content', None):
+    if properties.get('file:content'):
         content = properties.get('file:content')
         extent['main_count'] = extent['main_count'] + 1
         extent['main_size'] = extent['main_size'] + int(content['length'])
         extent['total_count'] = extent['main_count'] + 1
         extent['total_size'] = extent['main_size'] + int(content['length'])
-        print(f"main {extent['main_count']} {content['name']} {int(content['length'])}")
+        print(f"main {extent['main_count']} file:content {content['name']} {int(content['length'])}")
 
     # Original files vs file:content?
-    if properties.get('picture:views', None):
+    if properties.get('picture:views'):
         for view in properties.get('picture:views'):
             content = view['content']
             extent['deriv_count'] = extent['deriv_count'] + 1
             extent['deriv_size'] = extent['deriv_size'] + int(content['length'])
             extent['total_count'] = extent['total_count'] + 1
             extent['total_size'] = extent['total_size'] + int(content['length'])
-            print(f"deriv {extent['deriv_count']} {content['name']} {view['description']} {int(content['length'])}")
+            print(f"deriv {extent['deriv_count']} picture:views {content['name']} {view['description']} {int(content['length'])}")
+
+    # extra_files:file
+    if properties.get('extra_files:file'):
+        file = properties.get('extra_files:file')
+        for f in file:
+            if f.get('blob'):
+                blob = f.get('blob')
+                extent['aux_count'] = extent['aux_count'] + 1
+                extent['aux_size'] = extent['aux_size'] + int(blob['length'])
+                extent['total_count'] = extent['total_count'] + 1
+                extent['total_size'] = extent['total_size'] + int(blob['length'])
+                print(f"aux {extent['aux_count']} extra_files {blob['name']} {int(blob['length'])}")
+
+    # files:files
+    if properties.get('files:files'):
+        files = properties.get('files:files')
+        for file in files:
+            if file.get('file'):
+                file = file.get('file')
+                extent['main_count'] = extent['main_count'] + 1
+                extent['main_size'] = extent['main_size'] + int(file['length'])
+                extent['total_count'] = extent['main_count'] + 1
+                extent['total_size'] = extent['main_size'] + int(file['length'])
+                print(f"main {extent['main_count']} files:files {file['name']} {int(file['length'])}")
+
+    # vid:storyboard
+    if properties.get('vid:storyboard'):
+        storyboard = properties.get('vid:storyboard')
+        for board in storyboard:
+            if board.get('content'):
+                content = board.get('content')
+                extent['deriv_count'] = extent['deriv_count'] + 1
+                extent['deriv_size'] = extent['deriv_size'] + int(content['length'])
+                extent['total_count'] = extent['total_count'] + 1
+                extent['total_size'] = extent['total_size'] + int(content['length'])
+                print(f"deriv {extent['deriv_count']} storyboard {content['name']} {int(content['length'])}")
+
+    # vid:transcodedVideos
+    if properties.get('vid:transcodedVideos'):
+        videos = properties.get('vid:transcodedVideos')
+        for vid in videos:
+            if vid.get('content'):
+                content = vid.get('content')
+                extent['deriv_count'] = extent['deriv_count'] + 1
+                extent['deriv_size'] = extent['deriv_size'] + int(content['length'])
+                extent['total_count'] = extent['total_count'] + 1
+                extent['total_size'] = extent['total_size'] + int(content['length'])
+                print(f"deriv {extent['deriv_count']} vid:transcodedVideos {content['name']} {int(content['length'])}")
+
+    # auxiliary_files:file
+    if properties.get('auxiliary_files:file'):
+        auxfiles = properties.get('auxiliary_files:file')
+        #print(f"{auxfiles}")
+        # TODO
+
+    # 3D
+    if properties.get('threed:transmissionFormats'):
+        threed = properties.get('threed:transmissionFormats')
+        # print(f"{threed}")
+        # TODO
 
     return extent
 
