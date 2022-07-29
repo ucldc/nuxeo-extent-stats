@@ -1,19 +1,15 @@
 import sys, os
 import boto3
 import json
+import xlsxwriter
+import datetime
+import humanize
 
 BUCKET = os.environ.get('S3_BUCKET')
 
 def report(path):
-    prefix = path.lstrip('/asset-library/')
-    prefix = f"metadata/{prefix}"
-
-    s3_client = boto3.client('s3')
-    paginator = s3_client.get_paginator('list_objects_v2')
-    pages = paginator.paginate(
-        Bucket=BUCKET,
-        Prefix=prefix
-    )
+    path = path.lstrip('/asset-library/')
+    prefix = f"metadata/{path}"
 
     doc_count = 0
     main_count = 0
@@ -24,6 +20,13 @@ def report(path):
     deriv_size = 0
     total_count = 0
     total_size = 0
+
+    s3_client = boto3.client('s3')
+    paginator = s3_client.get_paginator('list_objects_v2')
+    pages = paginator.paginate(
+        Bucket=BUCKET,
+        Prefix=prefix
+    )
 
     for page in pages:
 
@@ -39,8 +42,8 @@ def report(path):
                 # Total Items (including components of complex objects; some may not have associated files)
                 doc_count = doc_count + 1
 
-                print("\n********************************")
-                print(f"{doc_count} {doc['path']}")
+                #print("\n********************************")
+                #print(f"{doc_count} {doc['path']}")
 
                 extent = get_extent(doc)
 
@@ -56,6 +59,7 @@ def report(path):
 
                 # TODO: deduplicate
 
+    '''
     print(f"{doc_count=}")
     print(f"{main_count=}")
     print(f"{main_size=}")
@@ -65,6 +69,35 @@ def report(path):
     print(f"{deriv_size=}")
     print(f"{total_count=}")
     print(f"{total_size=}")
+    '''
+
+    today = datetime.date.today().strftime('%Y-%m-%d')
+    workbook = xlsxwriter.Workbook(f'{path}-extent-stats-{today}.xlsx')
+    worksheet = workbook.add_worksheet('Summary')
+
+    stats = [
+        ["Doc Count", doc_count],
+        ["Content File Count", main_count],
+        ["Content File Size", humanize.naturalsize(main_size, binary=True)],
+        ["Aux File Count", aux_count],
+        ["Aux File Size", humanize.naturalsize(aux_size, binary=True)],
+        ["Derivative File Count", deriv_count],
+        ["Derivative File Size", humanize.naturalsize(deriv_size, binary=True)],
+        ["Total File Count", total_count],
+        ["Total File Size", humanize.naturalsize(total_size, binary=True)]
+    ]
+
+    bold = workbook.add_format({'bold': True})
+
+    row = 0
+    col = 0
+    for stat in (stats):
+        worksheet.write_string(0, col, f"{stat[0]}", bold)
+        worksheet.write_string(1, col, f"{stat[1]}")
+        col = col + 1
+
+    workbook.close()
+
 
 
 def get_extent(doc):
@@ -87,7 +120,7 @@ def get_extent(doc):
         extent['main_size'] = extent['main_size'] + int(content['length'])
         extent['total_count'] = extent['main_count'] + 1
         extent['total_size'] = extent['main_size'] + int(content['length'])
-        print(f"main {extent['main_count']} file:content {content['name']} {int(content['length'])}")
+        #print(f"main {extent['main_count']} file:content {content['name']} {int(content['length'])}")
 
     # Original files vs file:content?
     if properties.get('picture:views'):
@@ -97,7 +130,7 @@ def get_extent(doc):
             extent['deriv_size'] = extent['deriv_size'] + int(content['length'])
             extent['total_count'] = extent['total_count'] + 1
             extent['total_size'] = extent['total_size'] + int(content['length'])
-            print(f"deriv {extent['deriv_count']} picture:views {content['name']} {view['description']} {int(content['length'])}")
+            #print(f"deriv {extent['deriv_count']} picture:views {content['name']} {view['description']} {int(content['length'])}")
 
     # extra_files:file
     if properties.get('extra_files:file'):
@@ -109,7 +142,7 @@ def get_extent(doc):
                 extent['aux_size'] = extent['aux_size'] + int(blob['length'])
                 extent['total_count'] = extent['total_count'] + 1
                 extent['total_size'] = extent['total_size'] + int(blob['length'])
-                print(f"aux {extent['aux_count']} extra_files {blob['name']} {int(blob['length'])}")
+                #print(f"aux {extent['aux_count']} extra_files {blob['name']} {int(blob['length'])}")
 
     # files:files
     if properties.get('files:files'):
@@ -121,7 +154,7 @@ def get_extent(doc):
                 extent['main_size'] = extent['main_size'] + int(file['length'])
                 extent['total_count'] = extent['main_count'] + 1
                 extent['total_size'] = extent['main_size'] + int(file['length'])
-                print(f"main {extent['main_count']} files:files {file['name']} {int(file['length'])}")
+                #print(f"main {extent['main_count']} files:files {file['name']} {int(file['length'])}")
 
     # vid:storyboard
     if properties.get('vid:storyboard'):
@@ -133,7 +166,7 @@ def get_extent(doc):
                 extent['deriv_size'] = extent['deriv_size'] + int(content['length'])
                 extent['total_count'] = extent['total_count'] + 1
                 extent['total_size'] = extent['total_size'] + int(content['length'])
-                print(f"deriv {extent['deriv_count']} storyboard {content['name']} {int(content['length'])}")
+                #print(f"deriv {extent['deriv_count']} storyboard {content['name']} {int(content['length'])}")
 
     # vid:transcodedVideos
     if properties.get('vid:transcodedVideos'):
@@ -145,18 +178,18 @@ def get_extent(doc):
                 extent['deriv_size'] = extent['deriv_size'] + int(content['length'])
                 extent['total_count'] = extent['total_count'] + 1
                 extent['total_size'] = extent['total_size'] + int(content['length'])
-                print(f"deriv {extent['deriv_count']} vid:transcodedVideos {content['name']} {int(content['length'])}")
+                #print(f"deriv {extent['deriv_count']} vid:transcodedVideos {content['name']} {int(content['length'])}")
 
     # auxiliary_files:file
     if properties.get('auxiliary_files:file'):
         auxfiles = properties.get('auxiliary_files:file')
-        #print(f"{auxfiles}")
+        print(f"auxfiles {auxfiles}")
         # TODO
 
     # 3D
     if properties.get('threed:transmissionFormats'):
         threed = properties.get('threed:transmissionFormats')
-        # print(f"{threed}")
+        print(f"auxfiles {threed}")
         # TODO
 
     return extent
