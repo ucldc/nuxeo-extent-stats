@@ -6,6 +6,7 @@ import datetime
 import humanize
 
 BUCKET = os.environ.get('S3_BUCKET')
+MD5S = []
 
 def report(path):
     path = path.lstrip('/asset-library/')
@@ -116,28 +117,33 @@ def get_extent(doc):
 
     if properties.get('file:content'):
         content = properties.get('file:content')
-        extent['main_count'] = extent['main_count'] + 1
-        extent['main_size'] = extent['main_size'] + int(content['length'])
-        extent['total_count'] = extent['main_count'] + 1
-        extent['total_size'] = extent['main_size'] + int(content['length'])
-        #print(f"main {extent['main_count']} file:content {content['name']} {int(content['length'])}")
+        if not content['digest'] in MD5S:
+            MD5S.append(content['digest'])
+            extent['main_count'] = extent['main_count'] + 1
+            extent['main_size'] = extent['main_size'] + int(content['length'])
+            extent['total_count'] = extent['main_count'] + 1
+            extent['total_size'] = extent['main_size'] + int(content['length'])
+            #print(f"main {extent['main_count']} file:content {content['name']} {int(content['length'])}")
 
     # Original files vs file:content?
     if properties.get('picture:views'):
         for view in properties.get('picture:views'):
             content = view['content']
-            extent['deriv_count'] = extent['deriv_count'] + 1
-            extent['deriv_size'] = extent['deriv_size'] + int(content['length'])
-            extent['total_count'] = extent['total_count'] + 1
-            extent['total_size'] = extent['total_size'] + int(content['length'])
-            #print(f"deriv {extent['deriv_count']} picture:views {content['name']} {view['description']} {int(content['length'])}")
+            if not content['digest'] in MD5S:
+                MD5S.append(content['digest'])
+                extent['deriv_count'] = extent['deriv_count'] + 1
+                extent['deriv_size'] = extent['deriv_size'] + int(content['length'])
+                extent['total_count'] = extent['total_count'] + 1
+                extent['total_size'] = extent['total_size'] + int(content['length'])
+                #print(f"deriv {extent['deriv_count']} picture:views {content['name']} {view['description']} {int(content['length'])}")
 
     # extra_files:file
     if properties.get('extra_files:file'):
         file = properties.get('extra_files:file')
         for f in file:
-            if f.get('blob'):
+            if f.get('blob') and not f['blob']['digest'] in MD5S:
                 blob = f.get('blob')
+                MD5S.append(blob['digest'])
                 extent['aux_count'] = extent['aux_count'] + 1
                 extent['aux_size'] = extent['aux_size'] + int(blob['length'])
                 extent['total_count'] = extent['total_count'] + 1
@@ -148,7 +154,7 @@ def get_extent(doc):
     if properties.get('files:files'):
         files = properties.get('files:files')
         for file in files:
-            if file.get('file'):
+            if file.get('file') and not file['file']['digest'] in MD5S:
                 file = file.get('file')
                 extent['main_count'] = extent['main_count'] + 1
                 extent['main_size'] = extent['main_size'] + int(file['length'])
@@ -160,7 +166,7 @@ def get_extent(doc):
     if properties.get('vid:storyboard'):
         storyboard = properties.get('vid:storyboard')
         for board in storyboard:
-            if board.get('content'):
+            if board.get('content') and not board['content']['digest'] in MD5S:
                 content = board.get('content')
                 extent['deriv_count'] = extent['deriv_count'] + 1
                 extent['deriv_size'] = extent['deriv_size'] + int(content['length'])
@@ -172,7 +178,7 @@ def get_extent(doc):
     if properties.get('vid:transcodedVideos'):
         videos = properties.get('vid:transcodedVideos')
         for vid in videos:
-            if vid.get('content'):
+            if vid.get('content') and not vid['content']['digest'] in MD5S:
                 content = vid.get('content')
                 extent['deriv_count'] = extent['deriv_count'] + 1
                 extent['deriv_size'] = extent['deriv_size'] + int(content['length'])
@@ -193,7 +199,6 @@ def get_extent(doc):
         # TODO
 
     return extent
-
 
 
 
