@@ -8,10 +8,51 @@ import humanize
 BUCKET = os.environ.get('S3_BUCKET')
 MD5S = []
 
-def report(path):
-    path = path.lstrip('/asset-library/')
-    prefix = f"metadata/{path}"
+today = datetime.date.today().strftime('%Y-%m-%d')
+workbook = xlsxwriter.Workbook(f'TEST-extent-stats-{today}.xlsx')
+bold = workbook.add_format({'bold': True})
+summary_worksheet = workbook.add_worksheet('Summary')
 
+def report(prefixes):
+    '''
+    given a list of s3 prefixes, create an xlsx spreadsheet
+    containing extent stats for metadata contained in jsonl
+    files with those prefixes
+
+    first sheet will be a summary of all data
+
+    subsequent sheets will list stats for each prefix
+
+    '''
+    doc_count = 0
+    main_count = 0
+    main_size = 0
+    aux_count = 0
+    aux_size = 0
+    deriv_count = 0
+    deriv_size = 0
+    total_count = 0
+    total_size = 0
+
+    for prefix in prefixes:
+        print(f"getting stats for {prefix}")
+        get_stats(prefix)
+
+    '''
+    print(f"{doc_count=}")
+    print(f"{main_count=}")
+    print(f"{main_size=}")
+    print(f"{aux_count=}")
+    print(f"{aux_size=}")
+    print(f"{deriv_count=}")
+    print(f"{deriv_size=}")
+    print(f"{total_count=}")
+    print(f"{total_size=}")
+    '''
+
+    workbook.close()
+
+def get_stats(prefix):
     doc_count = 0
     main_count = 0
     main_size = 0
@@ -32,6 +73,7 @@ def report(path):
     for page in pages:
 
         for item in page['Contents']:
+            print(f"getting {item['Key']}")
             response = s3_client.get_object(
                 Bucket=BUCKET,
                 Key=item['Key']
@@ -43,12 +85,12 @@ def report(path):
                 # Total Items (including components of complex objects; some may not have associated files)
                 doc_count = doc_count + 1
 
-                #print("\n********************************")
-                #print(f"{doc_count} {doc['path']}")
+                print("\n********************************")
+                print(f"{doc_count} {doc['path']}")
 
                 extent = get_extent(doc)
 
-                #print(f"{extent}")
+                # tally stats
                 main_count = main_count + extent['main_count']
                 main_size = main_size + extent['main_size']
                 aux_count = aux_count + extent['aux_count']
@@ -58,48 +100,26 @@ def report(path):
                 total_count = total_count + extent['total_count']
                 total_size = total_size + extent['total_size']
 
-                # TODO: deduplicate
-
-    '''
-    print(f"{doc_count=}")
-    print(f"{main_count=}")
-    print(f"{main_size=}")
-    print(f"{aux_count=}")
-    print(f"{aux_size=}")
-    print(f"{deriv_count=}")
-    print(f"{deriv_size=}")
-    print(f"{total_count=}")
-    print(f"{total_size=}")
-    '''
-
-    today = datetime.date.today().strftime('%Y-%m-%d')
-    workbook = xlsxwriter.Workbook(f'{path}-extent-stats-{today}.xlsx')
-    worksheet = workbook.add_worksheet('Summary')
-
     stats = [
         ["Doc Count", doc_count],
-        ["Content File Count", main_count],
-        ["Content File Size", humanize.naturalsize(main_size, binary=True)],
-        ["Aux File Count", aux_count],
+        ["Unique Main File Count", main_count],
+        ["Main File Size", humanize.naturalsize(main_size, binary=True)],
+        ["Unique Aux File Count", aux_count],
         ["Aux File Size", humanize.naturalsize(aux_size, binary=True)],
-        ["Derivative File Count", deriv_count],
+        ["Unique Derivative File Count", deriv_count],
         ["Derivative File Size", humanize.naturalsize(deriv_size, binary=True)],
-        ["Total File Count", total_count],
+        ["Total Unique File Count", total_count],
         ["Total File Size", humanize.naturalsize(total_size, binary=True)]
     ]
 
-    bold = workbook.add_format({'bold': True})
-
+    sheetname = prefix.split('/')[-1]
+    worksheet = workbook.add_worksheet(f"{sheetname}")
     row = 0
     col = 0
     for stat in (stats):
         worksheet.write_string(0, col, f"{stat[0]}", bold)
         worksheet.write_string(1, col, f"{stat[1]}")
         col = col + 1
-
-    workbook.close()
-
-
 
 def get_extent(doc):
     extent = {
