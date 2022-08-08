@@ -23,15 +23,17 @@ def main(params):
     if params.all:
         s3_prefixes = []
         for campus in CAMPUSES:
-            s3_prefixes.extend(get_child_prefixes(campus))
+            s3_prefixes = get_child_prefixes(params.campus)
+            extentreport.report(campus, s3_prefixes)
     elif params.campus:
         s3_prefixes = get_child_prefixes(params.campus)
+        extentreport.report(params.campus, s3_prefixes)
     elif params.path:
         path = params.path.lstrip('/asset-library/')
         prefix = f"metadata/{path}"
         s3_prefixes = [prefix]
-
-    extentreport.report(s3_prefixes)
+        workbook_id = path.rstrip('/').replace('/', '_')
+        extentreport.report(workbook_id, s3_prefixes)
 
 def get_child_prefixes(campus):
     campus_prefix = f"metadata/{campus}"

@@ -8,12 +8,7 @@ import humanize
 BUCKET = os.environ.get('S3_BUCKET')
 MD5S = []
 
-today = datetime.date.today().strftime('%Y-%m-%d')
-workbook = xlsxwriter.Workbook(f'TEST-extent-stats-{today}.xlsx')
-bold = workbook.add_format({'bold': True})
-summary_worksheet = workbook.add_worksheet('Summary')
-
-def report(prefixes):
+def report(workbook_id, prefixes):
     '''
     given a list of s3 prefixes, create an xlsx spreadsheet
     containing extent stats for metadata contained in jsonl
@@ -24,6 +19,11 @@ def report(prefixes):
     subsequent sheets will list stats for each prefix
 
     '''
+    today = datetime.date.today().strftime('%Y-%m-%d')
+    workbook = xlsxwriter.Workbook(f'{workbook_id}-extent-stats-{today}.xlsx')
+    bold = workbook.add_format({'bold': True})
+    summary_worksheet = workbook.add_worksheet('Summary')
+
     summary_doc_count = 0
     summary_stats = {
         "main_count": 0,
@@ -42,7 +42,7 @@ def report(prefixes):
 
         sheetname = prefix.split('/')[-1]
         worksheet = workbook.add_worksheet(sheetname)
-        write_stats(stats, sheetname)
+        write_stats(stats, worksheet, bold)
 
         summary_doc_count += stats['doc_count']
         summary_stats['main_count'] += stats['main_count']
@@ -56,7 +56,7 @@ def report(prefixes):
 
     summary_stats['doc_count'] = summary_doc_count
 
-    write_stats(summary_stats, summary_worksheet.name)
+    write_stats(summary_stats, summary_worksheet, bold)
 
     workbook.close()
 
@@ -214,7 +214,7 @@ def get_extent(doc):
 
     return extent
 
-def write_stats(stats, sheetname):
+def write_stats(stats, worksheet, bold):
     excel_formatted_data = [
         ["Doc Count", stats['doc_count']],
         ["Unique Main File Count", stats['main_count']],
@@ -226,8 +226,6 @@ def write_stats(stats, sheetname):
         ["Total Unique File Count", stats['total_count']],
         ["Total File Size", humanize.naturalsize(stats['total_size'], binary=True)]
     ]
-
-    worksheet = workbook.get_worksheet_by_name(f"{sheetname}")
 
     row = 0
     col = 0
