@@ -135,10 +135,8 @@ class Fetcher(object):
 
     def fetchtos3(self, records):
         s3_client = boto3.client('s3')
-        nuxeo_path = self.path.lstrip(f'/asset-library/{self.campus}')
-        nuxeo_path = nuxeo_path.strip()
-        #nuxeo_path = self.uid
-        s3_key = f"metadata/{self.campus}/{nuxeo_path}/{self.write_page}.jsonl"
+        folder_path = self.path.lstrip('/asset-library/')
+        s3_key = f"metadata/{folder_path}/{self.write_page}.jsonl"
 
         jsonl = "\n".join([json.dumps(record) for record in records])
 
@@ -154,7 +152,6 @@ class Fetcher(object):
             print(f"ERROR loading to S3: {e}")
 
     def next_page(self):
-        ''' return json in case we ever want to run this in lambda '''
         if self.current_page_index == -1:
             return None
 
