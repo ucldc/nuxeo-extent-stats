@@ -24,44 +24,56 @@ def report(prefixes):
     subsequent sheets will list stats for each prefix
 
     '''
-    doc_count = 0
-    main_count = 0
-    main_size = 0
-    aux_count = 0
-    aux_size = 0
-    deriv_count = 0
-    deriv_size = 0
-    total_count = 0
-    total_size = 0
+    summary_doc_count = 0
+    summary_stats = {
+        "main_count": 0,
+        "main_size": 0,
+        "aux_count": 0,
+        "aux_size": 0,
+        "deriv_count": 0,
+        "deriv_size": 0,
+        "total_count": 0,
+        "total_size": 0
+    }
 
     for prefix in prefixes:
         print(f"getting stats for {prefix}")
-        get_stats(prefix)
+        stats = get_stats(prefix)
 
-    '''
-    print(f"{doc_count=}")
-    print(f"{main_count=}")
-    print(f"{main_size=}")
-    print(f"{aux_count=}")
-    print(f"{aux_size=}")
-    print(f"{deriv_count=}")
-    print(f"{deriv_size=}")
-    print(f"{total_count=}")
-    print(f"{total_size=}")
-    '''
+        sheetname = prefix.split('/')[-1]
+        worksheet = workbook.add_worksheet(sheetname)
+        write_stats(stats, sheetname)
+
+        summary_doc_count += stats['doc_count']
+        summary_stats['main_count'] += stats['main_count']
+        summary_stats['main_size'] += stats['main_size']
+        summary_stats['aux_count'] += stats['aux_count']
+        summary_stats['aux_size'] += stats['aux_size']
+        summary_stats['deriv_count'] += stats['deriv_count']
+        summary_stats['deriv_size'] += stats['deriv_size']
+        summary_stats['total_count'] += stats['total_count']
+        summary_stats['total_size'] += stats['total_size']
+
+    summary_stats['doc_count'] = summary_doc_count
+
+    write_stats(summary_stats, summary_worksheet.name)
 
     workbook.close()
 
 def get_stats(prefix):
+
     doc_count = 0
-    main_count = 0
-    main_size = 0
-    aux_count = 0
-    aux_size = 0
-    deriv_count = 0
-    deriv_size = 0
-    total_count = 0
-    total_size = 0
+
+    stats = {
+        "main_count": 0,
+        "main_size": 0,
+        "aux_count": 0,
+        "aux_size": 0,
+        "deriv_count": 0,
+        "deriv_size": 0,
+        "total_count": 0,
+        "total_size": 0
+    }
 
     s3_client = boto3.client('s3')
     paginator = s3_client.get_paginator('list_objects_v2')
@@ -88,38 +100,20 @@ def get_stats(prefix):
                 print("\n********************************")
                 print(f"{doc_count} {doc['path']}")
 
-                extent = get_extent(doc)
+                doc_extent = get_extent(doc)
 
-                # tally stats
-                main_count = main_count + extent['main_count']
-                main_size = main_size + extent['main_size']
-                aux_count = aux_count + extent['aux_count']
-                aux_size = aux_size + extent['aux_size']
-                deriv_count = deriv_count + extent['deriv_count']
-                deriv_size = deriv_size + extent['deriv_size']
-                total_count = total_count + extent['total_count']
-                total_size = total_size + extent['total_size']
+                stats['main_count'] += doc_extent['main_count']
+                stats['main_size'] += doc_extent['main_size']
+                stats['aux_count'] += doc_extent['aux_count']
+                stats['aux_size'] += doc_extent['aux_size']
+                stats['deriv_count'] += doc_extent['deriv_count']
+                stats['deriv_size'] += doc_extent['deriv_size']
+                stats['total_count'] += doc_extent['total_count']
+                stats['total_size'] += doc_extent['total_size']
 
-    stats = [
-        ["Doc Count", doc_count],
-        ["Unique Main File Count", main_count],
-        ["Main File Size", humanize.naturalsize(main_size, binary=True)],
-        ["Unique Aux File Count", aux_count],
-        ["Aux File Size", humanize.naturalsize(aux_size, binary=True)],
-        ["Unique Derivative File Count", deriv_count],
-        ["Derivative File Size", humanize.naturalsize(deriv_size, binary=True)],
-        ["Total Unique File Count", total_count],
-        ["Total File Size", humanize.naturalsize(total_size, binary=True)]
-    ]
+    stats['doc_count'] = doc_count
 
-    sheetname = prefix.split('/')[-1]
-    worksheet = workbook.add_worksheet(f"{sheetname}")
-    row = 0
-    col = 0
-    for stat in (stats):
-        worksheet.write_string(0, col, f"{stat[0]}", bold)
-        worksheet.write_string(1, col, f"{stat[1]}")
-        col = col + 1
+    return stats
 
 def get_extent(doc):
     extent = {
@@ -219,6 +213,28 @@ def get_extent(doc):
         # TODO
 
     return extent
+
+def write_stats(stats, sheetname):
+    excel_formatted_data = [
+        ["Doc Count", stats['doc_count']],
+        ["Unique Main File Count", stats['main_count']],
+        ["Main File Size", humanize.naturalsize(stats['main_size'], binary=True)],
+        ["Unique Aux File Count", stats['aux_count']],
+        ["Aux File Size", humanize.naturalsize(stats['aux_size'], binary=True)],
+        ["Unique Derivative File Count", stats['deriv_count']],
+        ["Derivative File Size", humanize.naturalsize(stats['deriv_size'], binary=True)],
+        ["Total Unique File Count", stats['total_count']],
+        ["Total File Size", humanize.naturalsize(stats['total_size'], binary=True)]
+    ]
+
+    worksheet = workbook.get_worksheet_by_name(f"{sheetname}")
+
+    row = 0
+    col = 0
+    for d in (excel_formatted_data):
+        worksheet.write_string(0, col, f"{d[0]}", bold)
+        worksheet.write_string(1, col, f"{d[1]}")
+        col = col + 1
 
 
 
