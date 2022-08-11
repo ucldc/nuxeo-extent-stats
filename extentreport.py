@@ -121,7 +121,7 @@ def get_stats(prefix):
                 doc = json.loads(line)
 
                 # Total Items (including components of complex objects; some may not have associated files)
-                doc_count = doc_count + 1
+                doc_count += 1
 
                 print("\n********************************")
                 print(f"{doc_count} {doc['path']}")
@@ -159,10 +159,10 @@ def get_extent(doc):
         content = properties.get('file:content')
         if not content['digest'] in MD5S:
             MD5S.append(content['digest'])
-            extent['main_count'] = extent['main_count'] + 1
-            extent['main_size'] = extent['main_size'] + int(content['length'])
-            extent['total_count'] = extent['main_count'] + 1
-            extent['total_size'] = extent['main_size'] + int(content['length'])
+            extent['main_count'] += 1
+            extent['main_size'] += int(content['length'])
+            extent['total_count'] += 1
+            extent['total_size'] += int(content['length'])
             #print(f"main {extent['main_count']} file:content {content['name']} {int(content['length'])}")
 
     # Original files vs file:content?
@@ -171,10 +171,10 @@ def get_extent(doc):
             content = view['content']
             if not content['digest'] in MD5S:
                 MD5S.append(content['digest'])
-                extent['deriv_count'] = extent['deriv_count'] + 1
-                extent['deriv_size'] = extent['deriv_size'] + int(content['length'])
-                extent['total_count'] = extent['total_count'] + 1
-                extent['total_size'] = extent['total_size'] + int(content['length'])
+                extent['deriv_count'] += 1
+                extent['deriv_size'] += int(content['length'])
+                extent['total_count'] += 1
+                extent['total_size'] += int(content['length'])
                 #print(f"deriv {extent['deriv_count']} picture:views {content['name']} {view['description']} {int(content['length'])}")
 
     # extra_files:file
@@ -184,10 +184,10 @@ def get_extent(doc):
             if f.get('blob') and not f['blob']['digest'] in MD5S:
                 blob = f.get('blob')
                 MD5S.append(blob['digest'])
-                extent['aux_count'] = extent['aux_count'] + 1
-                extent['aux_size'] = extent['aux_size'] + int(blob['length'])
-                extent['total_count'] = extent['total_count'] + 1
-                extent['total_size'] = extent['total_size'] + int(blob['length'])
+                extent['aux_count'] += 1
+                extent['aux_size'] += int(blob['length'])
+                extent['total_count'] += 1
+                extent['total_size'] += int(blob['length'])
                 #print(f"aux {extent['aux_count']} extra_files {blob['name']} {int(blob['length'])}")
 
     # files:files
@@ -196,10 +196,10 @@ def get_extent(doc):
         for file in files:
             if file.get('file') and not file['file']['digest'] in MD5S:
                 file = file.get('file')
-                extent['main_count'] = extent['main_count'] + 1
-                extent['main_size'] = extent['main_size'] + int(file['length'])
-                extent['total_count'] = extent['main_count'] + 1
-                extent['total_size'] = extent['main_size'] + int(file['length'])
+                extent['main_count'] += 1
+                extent['main_size'] += int(file['length'])
+                extent['total_count'] += 1
+                extent['total_size'] += int(file['length'])
                 #print(f"main {extent['main_count']} files:files {file['name']} {int(file['length'])}")
 
     # vid:storyboard
@@ -208,10 +208,10 @@ def get_extent(doc):
         for board in storyboard:
             if board.get('content') and not board['content']['digest'] in MD5S:
                 content = board.get('content')
-                extent['deriv_count'] = extent['deriv_count'] + 1
-                extent['deriv_size'] = extent['deriv_size'] + int(content['length'])
-                extent['total_count'] = extent['total_count'] + 1
-                extent['total_size'] = extent['total_size'] + int(content['length'])
+                extent['deriv_count'] += 1
+                extent['deriv_size'] += int(content['length'])
+                extent['total_count'] += 1
+                extent['total_size'] += int(content['length'])
                 #print(f"deriv {extent['deriv_count']} storyboard {content['name']} {int(content['length'])}")
 
     # vid:transcodedVideos
@@ -220,10 +220,10 @@ def get_extent(doc):
         for vid in videos:
             if vid.get('content') and not vid['content']['digest'] in MD5S:
                 content = vid.get('content')
-                extent['deriv_count'] = extent['deriv_count'] + 1
-                extent['deriv_size'] = extent['deriv_size'] + int(content['length'])
-                extent['total_count'] = extent['total_count'] + 1
-                extent['total_size'] = extent['total_size'] + int(content['length'])
+                extent['deriv_count'] += 1
+                extent['deriv_size'] += int(content['length'])
+                extent['total_count'] += 1
+                extent['total_size'] += int(content['length'])
                 #print(f"deriv {extent['deriv_count']} vid:transcodedVideos {content['name']} {int(content['length'])}")
 
     # auxiliary_files:file
