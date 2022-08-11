@@ -19,10 +19,35 @@ def report(workbook_id, prefixes):
     subsequent sheets will list stats for each prefix
 
     '''
+
+    # create the excel workbook
     today = datetime.date.today().strftime('%Y-%m-%d')
     workbook = xlsxwriter.Workbook(f'{workbook_id}-extent-stats-{today}.xlsx')
-    bold = workbook.add_format({'bold': True})
+    bold_format = workbook.add_format({'bold': True})
     summary_worksheet = workbook.add_worksheet('Summary')
+
+    # write the headings
+    headings = [
+        "Project Folder",
+        "Doc Count",
+        "Unique Main File Count",
+        "Main File Size",
+        "Unique Aux File Count",
+        "Aux File Size",
+        "Unique Derivative File Count",
+        "Derivative File Size",
+        "Total Unique File Count",
+        "Total File Size"
+    ]
+    row = 0
+    col = 0
+    for h in (headings):
+        summary_worksheet.write_string(0, col, h, bold_format)
+        summary_worksheet.set_column(col, col, len(h))
+        col = col + 1
+
+    # increment
+    row += 1
 
     summary_doc_count = 0
     summary_stats = {
@@ -40,9 +65,9 @@ def report(workbook_id, prefixes):
         print(f"getting stats for {prefix}")
         stats = get_stats(prefix)
 
-        sheetname = prefix.split('/')[-1]
-        worksheet = workbook.add_worksheet(sheetname)
-        write_stats(stats, worksheet, bold)
+        rowname = prefix.split('/')[-1]
+        write_stats(stats, summary_worksheet, row, rowname)
+        row += 1
 
         summary_doc_count += stats['doc_count']
         summary_stats['main_count'] += stats['main_count']
@@ -56,7 +81,8 @@ def report(workbook_id, prefixes):
 
     summary_stats['doc_count'] = summary_doc_count
 
-    write_stats(summary_stats, summary_worksheet, bold)
+    rowname = 'TOTALS'
+    write_stats(summary_stats, summary_worksheet, row, rowname)
 
     workbook.close()
 
@@ -214,24 +240,24 @@ def get_extent(doc):
 
     return extent
 
-def write_stats(stats, worksheet, bold):
-    excel_formatted_data = [
-        ["Doc Count", stats['doc_count']],
-        ["Unique Main File Count", stats['main_count']],
-        ["Main File Size", humanize.naturalsize(stats['main_size'], binary=True)],
-        ["Unique Aux File Count", stats['aux_count']],
-        ["Aux File Size", humanize.naturalsize(stats['aux_size'], binary=True)],
-        ["Unique Derivative File Count", stats['deriv_count']],
-        ["Derivative File Size", humanize.naturalsize(stats['deriv_size'], binary=True)],
-        ["Total Unique File Count", stats['total_count']],
-        ["Total File Size", humanize.naturalsize(stats['total_size'], binary=True)]
+def write_stats(stats, worksheet, rownum, rowname):
+
+    formatted_data = [
+        rowname,
+        stats['doc_count'],
+        stats['main_count'],
+        humanize.naturalsize(stats['main_size'], binary=True),
+        stats['aux_count'],
+        humanize.naturalsize(stats['aux_size'], binary=True),
+        stats['deriv_count'],
+        humanize.naturalsize(stats['deriv_size'], binary=True),
+        stats['total_count'],
+        humanize.naturalsize(stats['total_size'], binary=True)
     ]
 
-    row = 0
     col = 0
-    for d in (excel_formatted_data):
-        worksheet.write_string(0, col, f"{d[0]}", bold)
-        worksheet.write_string(1, col, f"{d[1]}")
+    for d in (formatted_data):
+        worksheet.write(rownum, col, d)
         col = col + 1
 
 
