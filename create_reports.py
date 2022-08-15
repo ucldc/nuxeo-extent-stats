@@ -23,7 +23,7 @@ def main(params):
     if params.all:
         s3_prefixes = []
         for campus in CAMPUSES:
-            s3_prefixes = get_child_prefixes(params.campus)
+            s3_prefixes = get_child_prefixes(campus)
             extentreport.report(campus, s3_prefixes)
     elif params.campus:
         s3_prefixes = get_child_prefixes(params.campus)

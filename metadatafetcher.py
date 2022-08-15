@@ -8,7 +8,7 @@ if DEBUG is False:
     import boto3
 
 NUXEO_TOKEN = os.environ.get('NUXEO_TOKEN')
-API_BASE = os.environ.get('NUXEO_API_BASE', 'https://nuxeo.cdlib.org/Nuxeo/')
+API_BASE = os.environ.get('NUXEO_API_BASE', 'https://nuxeo.cdlib.org/nuxeo/')
 API_PATH = os.environ.get('NUXEO_API_PATH', 'site/api/v1')
 BUCKET = os.environ.get('S3_BUCKET')
 

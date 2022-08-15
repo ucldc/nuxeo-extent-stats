@@ -111,7 +111,7 @@ def get_stats(prefix):
     for page in pages:
 
         for item in page['Contents']:
-            print(f"getting {item['Key']}")
+            print(f"getting s3 object: {item['Key']}")
             response = s3_client.get_object(
                 Bucket=BUCKET,
                 Key=item['Key']
@@ -161,8 +161,6 @@ def get_extent(doc):
             MD5S.append(content['digest'])
             extent['main_count'] += 1
             extent['main_size'] += int(content['length'])
-            extent['total_count'] += 1
-            extent['total_size'] += int(content['length'])
             #print(f"main {extent['main_count']} file:content {content['name']} {int(content['length'])}")
 
     # Original files vs file:content?
@@ -173,8 +171,6 @@ def get_extent(doc):
                 MD5S.append(content['digest'])
                 extent['deriv_count'] += 1
                 extent['deriv_size'] += int(content['length'])
-                extent['total_count'] += 1
-                extent['total_size'] += int(content['length'])
                 #print(f"deriv {extent['deriv_count']} picture:views {content['name']} {view['description']} {int(content['length'])}")
 
     # extra_files:file
@@ -186,8 +182,6 @@ def get_extent(doc):
                 MD5S.append(blob['digest'])
                 extent['aux_count'] += 1
                 extent['aux_size'] += int(blob['length'])
-                extent['total_count'] += 1
-                extent['total_size'] += int(blob['length'])
                 #print(f"aux {extent['aux_count']} extra_files {blob['name']} {int(blob['length'])}")
 
     # files:files
@@ -198,8 +192,6 @@ def get_extent(doc):
                 file = file.get('file')
                 extent['main_count'] += 1
                 extent['main_size'] += int(file['length'])
-                extent['total_count'] += 1
-                extent['total_size'] += int(file['length'])
                 #print(f"main {extent['main_count']} files:files {file['name']} {int(file['length'])}")
 
     # vid:storyboard
@@ -210,8 +202,6 @@ def get_extent(doc):
                 content = board.get('content')
                 extent['deriv_count'] += 1
                 extent['deriv_size'] += int(content['length'])
-                extent['total_count'] += 1
-                extent['total_size'] += int(content['length'])
                 #print(f"deriv {extent['deriv_count']} storyboard {content['name']} {int(content['length'])}")
 
     # vid:transcodedVideos
@@ -222,8 +212,6 @@ def get_extent(doc):
                 content = vid.get('content')
                 extent['deriv_count'] += 1
                 extent['deriv_size'] += int(content['length'])
-                extent['total_count'] += 1
-                extent['total_size'] += int(content['length'])
                 #print(f"deriv {extent['deriv_count']} vid:transcodedVideos {content['name']} {int(content['length'])}")
 
     # auxiliary_files:file
@@ -237,6 +225,9 @@ def get_extent(doc):
         threed = properties.get('threed:transmissionFormats')
         print(f"auxfiles {threed}")
         # TODO
+
+    extent['total_count'] = extent['main_count'] + extent['deriv_count'] + extent['aux_count']
+    extent['total_size'] = extent['main_size'] + extent['deriv_size'] + extent['aux_size']
 
     return extent
 
