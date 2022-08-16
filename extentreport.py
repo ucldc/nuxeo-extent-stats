@@ -248,14 +248,20 @@ def get_extent(doc):
     # auxiliary_files:file
     if properties.get('auxiliary_files:file'):
         auxfiles = properties.get('auxiliary_files:file')
-        print(f"auxfiles {auxfiles}")
-        # TODO
+        for af in auxfiles:
+            if af.get('content') and not af['content']['digest'] in MD5S:
+                content = af.get('content')
+                extent['deriv_count'] += 1
+                extent['deriv_size'] += int(content['length'])
 
     # 3D
     if properties.get('threed:transmissionFormats'):
-        threed = properties.get('threed:transmissionFormats')
-        print(f"threedfiles {threed}")
-        # TODO
+        formats = properties.get('threed:transmissionFormats')
+        for format in formats:
+            if format.get('content') and not format['content']['digest'] in MD5S:
+                content = format.get('content')
+                extent['deriv_count'] += 1
+                extent['deriv_size'] += int(content['length'])
 
     extent['total_count'] = extent['main_count'] + extent['deriv_count'] + extent['aux_count']
     extent['total_size'] = extent['main_size'] + extent['deriv_size'] + extent['aux_size']
