@@ -14,11 +14,13 @@ BUCKET = os.environ.get('S3_BUCKET')
 
 CHILD_NXQL = "SELECT * FROM SampleCustomPicture, CustomFile, CustomVideo, CustomAudio, CustomThreeD " \
               "WHERE ecm:parentId = '{}' AND " \
-              "ecm:isTrashed = 0 ORDER BY ecm:name"
+              "ecm:isVersion = 0 AND " \
+              "ecm:isTrashed = 0 ORDER BY ecm:name" \
 
 ANCESTOR_NXQL = "SELECT * FROM SampleCustomPicture, CustomFile, CustomVideo, CustomAudio, CustomThreeD " \
               "WHERE ecm:ancestorId = '{}' AND " \
-              "ecm:isTrashed = 0 ORDER BY ecm:name"
+              "ecm:isVersion = 0 AND " \
+              "ecm:isTrashed = 0 ORDER BY ecm:name" \
 
 NUXEO_REQUEST_HEADERS = {
                 "Accept": "application/json",
