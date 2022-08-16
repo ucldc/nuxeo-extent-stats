@@ -11,6 +11,11 @@ NUXEO_TOKEN = os.environ.get('NUXEO_TOKEN')
 API_BASE = os.environ.get('NUXEO_API_BASE', 'https://nuxeo.cdlib.org/nuxeo/')
 API_PATH = os.environ.get('NUXEO_API_PATH', 'site/api/v1')
 BUCKET = os.environ.get('S3_BUCKET')
+# FIXME
+MD_PREFIX = {
+    "db": "metadata",
+    "es": "metadata-es"
+}
 
 CHILD_NXQL = "SELECT * FROM SampleCustomPicture, CustomFile, CustomVideo, CustomAudio, CustomThreeD " \
               "WHERE ecm:parentId = '{}' AND " \
@@ -38,7 +43,9 @@ class Fetcher(object):
         if self.uid is None:
             self.uid = self.get_nuxeo_uid_for_path(self.path)
         self.current_page_index = params.get('current_page_index', 0)
-        self.write_page = params.get('write_page', 0)    
+        self.write_page = params.get('write_page', 0)
+        self.datasource = params.get('datasource', 'es')
+        self.md_prefix = MD_PREFIX[self.datasource]
 
     def fetch_page(self):
         page = self.build_fetch_request()
@@ -64,13 +71,22 @@ class Fetcher(object):
                 query = ANCESTOR_NXQL.format(self.uid)
             else:
                 query = CHILD_NXQL.format(self.uid)
-            url = u'/'.join([API_BASE, API_PATH, "search/lang/NXQL/execute"])
             headers = NUXEO_REQUEST_HEADERS
-            params = {
-                'pageSize': '100',
-                'currentPageIndex': self.current_page_index,
-                'query': query
-            }
+
+            if self.datasource == 'db':
+                url = u'/'.join([API_BASE, API_PATH, f"@search?query={query}"])
+                params = {
+                    'pageSize': '100',
+                    'currentPageIndex': self.current_page_index
+                }
+            else:
+                url = u'/'.join([API_BASE, API_PATH, "search/lang/NXQL/execute"])
+                params = {
+                    'pageSize': '100',
+                    'currentPageIndex': self.current_page_index,
+                    'query': query
+                }
+
             request = {'url': url, 'headers': headers, 'params': params}
             print(
                 f"Fetching page"
@@ -122,7 +138,7 @@ class Fetcher(object):
         nuxeo_path = self.path.lstrip(f'/asset-library/{self.campus}')
         nuxeo_path = nuxeo_path.strip()
         path = f"{os.getcwd()}/{self.campus}/{nuxeo_path}"
-        path = f"{os.getcwd()}/metadata/{self.campus}/{nuxeo_path}"
+        path = f"{os.getcwd()}/{self.md_prefix}/{self.campus}/{nuxeo_path}"
         
         if not os.path.exists(path):
             os.makedirs(path)
@@ -138,7 +154,7 @@ class Fetcher(object):
     def fetchtos3(self, records):
         s3_client = boto3.client('s3')
         folder_path = self.path.lstrip('/asset-library/')
-        s3_key = f"metadata/{folder_path}/{self.write_page}.jsonl"
+        s3_key = f"{self.md_prefix}/{folder_path}/{self.write_page}.jsonl"
 
         jsonl = "\n".join([json.dumps(record) for record in records])
 

@@ -11,7 +11,7 @@ API_PATH = os.environ.get('NUXEO_API_PATH', 'site/api/v1')
 BUCKET = os.environ.get('S3_BUCKET')
 
 FOLDER_NXQL = "SELECT * FROM Organization " \
-                        "WHERE ecm:parentId = '{}'" \
+                        "WHERE ecm:parentId = '{}' " \
                         "AND ecm:isTrashed = 0"
 
 NUXEO_REQUEST_HEADERS = {
@@ -92,12 +92,12 @@ def get_records(http_resp):
 
     return documents, count
 
-def fetchtolocal(outdir, folders):    
+def fetchtolocal(outdir, folders):
     outdir = f"{os.getcwd()}/folders/{outdir}"
-    
+
     if not os.path.exists(outdir):
         os.makedirs(outdir)
-    
+
     filename = os.path.join(outdir, "folders.json")
     f = open(filename, "w+")
 

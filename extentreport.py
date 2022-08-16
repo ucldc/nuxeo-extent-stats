@@ -2,27 +2,33 @@ import sys, os
 import boto3
 import json
 import xlsxwriter
-import datetime
+from datetime import datetime
+import pytz
 import humanize
 
 BUCKET = os.environ.get('S3_BUCKET')
 MD5S = []
 
-def report(workbook_id, prefixes):
+def report(workbook_id, prefixes, datasource):
     '''
     given a list of s3 prefixes, create an xlsx spreadsheet
     containing extent stats for metadata contained in jsonl
     files with those prefixes
-
-    first sheet will be a summary of all data
-
-    subsequent sheets will list stats for each prefix
-
     '''
 
     # create the excel workbook
-    today = datetime.date.today().strftime('%Y-%m-%d')
-    workbook = xlsxwriter.Workbook(f'{workbook_id}-extent-stats-{today}.xlsx')
+    #today = datetime.now(pytz.timezone('US/Pacific')).strftime('%Y%m%d-%H%M')
+    today = datetime.now(pytz.timezone('US/Pacific')).strftime('%Y%m%d')
+    # FIXME
+    if datasource == 'es':
+        outdir = os.path.join(os.getcwd(), f"reports-elastic-{today}")
+    else:
+        outdir = os.path.join(os.getcwd(), f"reports-{datasource}-{today}")
+    if not os.path.exists(outdir):
+        os.mkdir(outdir)
+    outfile = f"{workbook_id}-extent-stats-{today}.xlsx"
+    outpath = os.path.join(outdir, outfile)
+    workbook = xlsxwriter.Workbook(outpath)
     bold_format = workbook.add_format({'bold': True})
     summary_worksheet = workbook.add_worksheet('Summary')
 
@@ -49,6 +55,19 @@ def report(workbook_id, prefixes):
     # increment
     row += 1
 
+    # create a file to contain a list of all docs for QA purposes
+    # FIXME
+    if datasource == 'es':
+        doclist_dir = os.path.join(os.getcwd(), f"doclists-elastic-{today}")
+    else:
+        doclist_dir = os.path.join(os.getcwd(), f"doclists-{datasource}-{today}")
+    doclist_file = f"{workbook_id}-doclist-{today}.txt"
+    doclist_path = os.path.join(doclist_dir, doclist_file)
+    if os.path.exists(doclist_path):
+        os.remove(doclist_path)
+    if not os.path.exists(doclist_dir):
+        os.mkdir(doclist_dir)
+
     summary_doc_count = 0
     summary_stats = {
         "main_count": 0,
@@ -63,11 +82,21 @@ def report(workbook_id, prefixes):
 
     for prefix in prefixes:
         print(f"getting stats for {prefix}")
-        stats = get_stats(prefix)
+        stats = get_stats(prefix, doclist_path)
 
         rowname = prefix.split('/')[-1]
         write_stats(stats, summary_worksheet, row, rowname)
         row += 1
+
+        # write doc info to a file
+        if not os.path.exists(doclist_path):
+            with open(doclist_path, "w") as f:
+                for doc in stats['docs']:
+                    f.write(f"{doc}")
+        else:
+            with open(doclist_path, "a") as f:
+                for doc in stats['docs']:
+                    f.write(f"{doc}")
 
         summary_doc_count += stats['doc_count']
         summary_stats['main_count'] += stats['main_count']
@@ -86,7 +115,7 @@ def report(workbook_id, prefixes):
 
     workbook.close()
 
-def get_stats(prefix):
+def get_stats(prefix, doclist_path):
 
     doc_count = 0
 
@@ -98,7 +127,8 @@ def get_stats(prefix):
         "deriv_count": 0,
         "deriv_size": 0,
         "total_count": 0,
-        "total_size": 0
+        "total_size": 0,
+        "docs": []
     }
 
     s3_client = boto3.client('s3')
@@ -111,7 +141,7 @@ def get_stats(prefix):
     for page in pages:
 
         for item in page['Contents']:
-            print(f"getting s3 object: {item['Key']}")
+            #print(f"getting s3 object: {item['Key']}")
             response = s3_client.get_object(
                 Bucket=BUCKET,
                 Key=item['Key']
@@ -123,8 +153,8 @@ def get_stats(prefix):
                 # Total Items (including components of complex objects; some may not have associated files)
                 doc_count += 1
 
-                print("\n********************************")
-                print(f"{doc_count} {doc['path']}")
+                #print("\n********************************")
+                #print(f"{doc_count} {doc['path']}")
 
                 doc_extent = get_extent(doc)
 
@@ -136,6 +166,7 @@ def get_stats(prefix):
                 stats['deriv_size'] += doc_extent['deriv_size']
                 stats['total_count'] += doc_extent['total_count']
                 stats['total_size'] += doc_extent['total_size']
+                stats['docs'].append(f"{doc['uid']}, {doc['path']}\n")
 
     stats['doc_count'] = doc_count
 
@@ -223,7 +254,7 @@ def get_extent(doc):
     # 3D
     if properties.get('threed:transmissionFormats'):
         threed = properties.get('threed:transmissionFormats')
-        print(f"auxfiles {threed}")
+        print(f"threedfiles {threed}")
         # TODO
 
     extent['total_count'] = extent['main_count'] + extent['deriv_count'] + extent['aux_count']

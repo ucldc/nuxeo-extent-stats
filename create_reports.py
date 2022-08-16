@@ -4,6 +4,10 @@ import extentreport
 import boto3
 
 BUCKET = os.environ.get('S3_BUCKET')
+MD_PREFIX = {
+    "db": "metadata",
+    "es": "metadata-es"
+}
 CAMPUSES = [
     "UCB",
     "UCD",
@@ -15,28 +19,30 @@ CAMPUSES = [
     "UCSB",
     "UCSC",
     "UCSD",
-    "UCSF",
+    "UCSF"
 ]
 
 def main(params):
-
     if params.all:
-        s3_prefixes = []
+        sub_prefixes = []
         for campus in CAMPUSES:
-            s3_prefixes = get_child_prefixes(campus)
-            extentreport.report(campus, s3_prefixes)
+            sub_prefixes = get_child_prefixes(campus, params.datasource)
+            workbook_id = f"{campus}-{params.datasource}"
+            extentreport.report(workbook_id, sub_prefixes, params.datasource)
     elif params.campus:
-        s3_prefixes = get_child_prefixes(params.campus)
-        extentreport.report(params.campus, s3_prefixes)
+        sub_prefixes = get_child_prefixes(params.campus, params.datasource)
+        workbook_id = f"{params.campus}-{params.datasource}"
+        extentreport.report(params.campus, sub_prefixes, params.datasource)
     elif params.path:
         path = params.path.lstrip('/asset-library/')
         prefix = f"metadata/{path}"
-        s3_prefixes = [prefix]
+        sub_prefixes = [prefix]
         workbook_id = path.rstrip('/').replace('/', '_')
-        extentreport.report(workbook_id, s3_prefixes)
+        workbook_id = f"{workbook_id}-{params.datasource}"
+        extentreport.report(workbook_id, sub_prefixes, params.datasource)
 
-def get_child_prefixes(campus):
-    campus_prefix = f"metadata/{campus}"
+def get_child_prefixes(campus, datasource):
+    campus_prefix = f"{MD_PREFIX[datasource]}/{campus}"
     s3_client = boto3.client('s3')
     paginator = s3_client.get_paginator('list_objects_v2')
     pages = paginator.paginate(
@@ -61,6 +67,7 @@ if __name__ == "__main__":
     top_folder.add_argument('--campus', help="single campus")
     top_folder.add_argument('--path', help="nuxeo path for folder")
     parser.add_argument('--derivatives', help="include derivatives in file count", default=True)
+    parser.add_argument('--datasource', choices=['es', 'db'], help="metadata source: es (elasticsearch) or db (database)", default='es')
 
     args = parser.parse_args()
     sys.exit(main(args))
