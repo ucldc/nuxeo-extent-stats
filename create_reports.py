@@ -40,26 +40,26 @@ def main(params):
         extentreport.report(workbook_id, params.campus, sub_prefixes, params.datasource, query_db)
     elif params.path:
         path = params.path.lstrip('/asset-library/')
-        prefix = f"metadata/{path}"
-        sub_prefixes = [prefix]
+        sub_prefixes = get_child_prefixes(path, params.datasource)
         campus_equiv = path.rstrip('/').replace('/', '_')
         workbook_id = f"{campus_equiv}-{params.datasource}"
         extentreport.report(workbook_id, campus_equiv, sub_prefixes, params.datasource, query_db)
 
-def get_child_prefixes(campus, datasource):
-    campus_prefix = f"{MD_PREFIX[datasource]}/{campus}"
+def get_child_prefixes(folder, datasource):
+    folder_prefix = f"{MD_PREFIX[datasource]}/{folder.rstrip('/')}"
     s3_client = boto3.client('s3')
     paginator = s3_client.get_paginator('list_objects_v2')
     pages = paginator.paginate(
         Bucket=BUCKET,
-        Prefix=campus_prefix
+        Prefix=folder_prefix
     )
 
     prefixes = []
+    folder_prefix_parts_count = len(folder_prefix.split('/'))
     for page in pages:
         for item in page['Contents']:
             parts = item['Key'].split('/')
-            child_prefix = '/'.join(parts[0:3])
+            child_prefix = '/'.join(parts[0:folder_prefix_parts_count + 1])
             if not child_prefix in prefixes:
                 prefixes.append(child_prefix)
 
