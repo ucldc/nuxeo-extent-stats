@@ -74,6 +74,12 @@ To create reports for all campuses while the Nuxeo API is broken:
 docker exec nuxeoextent-db python create_reports.py --all --es_api_broken
 ```
 
+To create a report for a particular subfolder (4 levels of nesting max, e.g. /asset-library/UCX/sub1/sub2/sub3/sub4)
+
+```
+docker exec nuxeoextent-db python create_reports.py --path /asset-library/UCX/sub1/sub2 --es_api_broken
+```
+
 ### TO DO
 
 * set this up to run on AWS Fargate (once the Nuxeo API is fixed?)
