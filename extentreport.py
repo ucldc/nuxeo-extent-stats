@@ -5,11 +5,23 @@ import xlsxwriter
 from datetime import datetime
 import pytz
 import humanize
+import requests
 
 BUCKET = os.environ.get('S3_BUCKET')
 MD5S = []
 
-def report(workbook_id, prefixes, datasource):
+NUXEO_TOKEN = os.environ.get('NUXEO_TOKEN')
+API_BASE = os.environ.get('NUXEO_API_BASE', 'https://nuxeo.cdlib.org/nuxeo/')
+API_PATH = os.environ.get('NUXEO_API_PATH', 'site/api/v1')
+NUXEO_REQUEST_HEADERS = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "X-NXDocumentProperties": "*",
+                "X-NXRepository": "default",
+                "X-Authentication-Token": NUXEO_TOKEN
+                }
+
+def report(workbook_id, prefixes, datasource, query_db):
     '''
     given a list of s3 prefixes, create an xlsx spreadsheet
     containing extent stats for metadata contained in jsonl
@@ -21,12 +33,12 @@ def report(workbook_id, prefixes, datasource):
     today = datetime.now(pytz.timezone('US/Pacific')).strftime('%Y%m%d')
     # FIXME
     if datasource == 'es':
-        outdir = os.path.join(os.getcwd(), f"reports-elastic-{today}")
+        outdir = os.path.join(os.getcwd(), f"reports-es-{today}")
     else:
         outdir = os.path.join(os.getcwd(), f"reports-{datasource}-{today}")
     if not os.path.exists(outdir):
         os.mkdir(outdir)
-    outfile = f"{workbook_id}-extent-stats-{today}.xlsx"
+    outfile = f"{workbook_id}-{datasource}-extent-stats-{today}.xlsx"
     outpath = os.path.join(outdir, outfile)
     workbook = xlsxwriter.Workbook(outpath)
     bold_format = workbook.add_format({'bold': True})
@@ -57,7 +69,7 @@ def report(workbook_id, prefixes, datasource):
 
     # create a file to contain a list of all docs for QA purposes
     doclist_dir = os.path.join(os.getcwd(), f"doclists-{datasource}-{today}")
-    doclist_file = f"{workbook_id}-doclist-{today}.txt"
+    doclist_file = f"{workbook_id}-{datasource}-doclist-{today}.txt"
     doclist_path = os.path.join(doclist_dir, doclist_file)
     if os.path.exists(doclist_path):
         os.remove(doclist_path)
@@ -78,7 +90,7 @@ def report(workbook_id, prefixes, datasource):
 
     for prefix in prefixes:
         print(f"getting stats for {prefix}")
-        stats = get_stats(prefix, doclist_path)
+        stats = get_stats(prefix, doclist_path, query_db)
 
         rowname = prefix.split('/')[-1]
         write_stats(stats, summary_worksheet, row, rowname)
@@ -111,7 +123,7 @@ def report(workbook_id, prefixes, datasource):
 
     workbook.close()
 
-def get_stats(prefix, doclist_path):
+def get_stats(prefix, doclist_path, query_db):
 
     doc_count = 0
 
@@ -152,7 +164,14 @@ def get_stats(prefix, doclist_path):
                 #print("\n********************************")
                 #print(f"{doc_count} {doc['path']}")
 
-                doc_extent = get_extent(doc)
+                # query db for each record as a workaround while ES API endpoint is broken
+                if query_db:
+                    uid = doc['uid']
+                    doc_md = get_metadata_from_db(uid)
+                else:
+                    doc_md = doc
+
+                doc_extent = get_extent(doc_md)
 
                 stats['main_count'] += doc_extent['main_count']
                 stats['main_size'] += doc_extent['main_size']
@@ -162,7 +181,7 @@ def get_stats(prefix, doclist_path):
                 stats['deriv_size'] += doc_extent['deriv_size']
                 stats['total_count'] += doc_extent['total_count']
                 stats['total_size'] += doc_extent['total_size']
-                stats['docs'].append(f"{doc['uid']}, {doc['path']}\n")
+                stats['docs'].append(f"{doc_md['uid']}, {doc_md['path']}\n")
 
     stats['doc_count'] = doc_count
 
@@ -284,5 +303,12 @@ def write_stats(stats, worksheet, rownum, rowname):
         worksheet.write(rownum, col, d)
         col = col + 1
 
-
+def get_metadata_from_db(uid):
+    # GET 'https://nuxeo.cdlib.org/nuxeo/site/api/v1/id/32f09ee0-dcc0-4746-90c4-ba4c710447cd' -H 'X-NXproperties: *' -H 'X-NXRepository: default' -H 'content-type: application/json' -u Administrator -p
+    url = u'/'.join([API_BASE, API_PATH, "id", uid])
+    request = {'url': url, 'headers': NUXEO_REQUEST_HEADERS}
+    response = requests.get(**request)
+    response.raise_for_status()
+    json_resp = response.json()
+    return json_resp
 

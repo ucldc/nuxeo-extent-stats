@@ -23,23 +23,28 @@ CAMPUSES = [
 ]
 
 def main(params):
+    if params.datasource == 'es' and params.es_api_broken:
+        query_db = True
+    else:
+        query_db = False
+
     if params.all:
         sub_prefixes = []
         for campus in CAMPUSES:
             sub_prefixes = get_child_prefixes(campus, params.datasource)
             workbook_id = f"{campus}-{params.datasource}"
-            extentreport.report(workbook_id, sub_prefixes, params.datasource)
+            extentreport.report(workbook_id, sub_prefixes, params.datasource, query_db)
     elif params.campus:
         sub_prefixes = get_child_prefixes(params.campus, params.datasource)
         workbook_id = f"{params.campus}-{params.datasource}"
-        extentreport.report(params.campus, sub_prefixes, params.datasource)
+        extentreport.report(params.campus, sub_prefixes, params.datasource, query_db)
     elif params.path:
         path = params.path.lstrip('/asset-library/')
         prefix = f"metadata/{path}"
         sub_prefixes = [prefix]
         workbook_id = path.rstrip('/').replace('/', '_')
         workbook_id = f"{workbook_id}-{params.datasource}"
-        extentreport.report(workbook_id, sub_prefixes, params.datasource)
+        extentreport.report(workbook_id, sub_prefixes, params.datasource, query_db)
 
 def get_child_prefixes(campus, datasource):
     campus_prefix = f"{MD_PREFIX[datasource]}/{campus}"
@@ -68,6 +73,7 @@ if __name__ == "__main__":
     top_folder.add_argument('--path', help="nuxeo path for folder")
     parser.add_argument('--derivatives', help="include derivatives in file count", default=True)
     parser.add_argument('--datasource', choices=['es', 'db'], help="metadata source: es (elasticsearch) or db (database)", default='es')
+    parser.add_argument('--es_api_broken', action="store_true", help="set this option when the Nuxeo elasticsearch API is broken")
 
     args = parser.parse_args()
     sys.exit(main(args))
