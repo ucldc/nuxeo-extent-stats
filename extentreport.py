@@ -8,6 +8,10 @@ import humanize
 import requests
 
 BUCKET = os.environ.get('S3_BUCKET')
+REPORT_PREFIXES = {
+    "es": "reports-es",
+    "db": "reports-db"
+}
 MD5S = []
 
 NUXEO_TOKEN = os.environ.get('NUXEO_TOKEN')
@@ -21,7 +25,7 @@ NUXEO_REQUEST_HEADERS = {
                 "X-Authentication-Token": NUXEO_TOKEN
                 }
 
-def report(workbook_id, prefixes, datasource, query_db):
+def report(workbook_id, campus, prefixes, datasource, query_db):
     '''
     given a list of s3 prefixes, create an xlsx spreadsheet
     containing extent stats for metadata contained in jsonl
@@ -31,14 +35,10 @@ def report(workbook_id, prefixes, datasource, query_db):
     # create the excel workbook
     #today = datetime.now(pytz.timezone('US/Pacific')).strftime('%Y%m%d-%H%M')
     today = datetime.now(pytz.timezone('US/Pacific')).strftime('%Y%m%d')
-    # FIXME
-    if datasource == 'es':
-        outdir = os.path.join(os.getcwd(), f"reports-es-{today}")
-    else:
-        outdir = os.path.join(os.getcwd(), f"reports-{datasource}-{today}")
+    outdir = os.path.join(os.getcwd(), f"reports-{datasource}-{today}")
     if not os.path.exists(outdir):
         os.mkdir(outdir)
-    outfile = f"{workbook_id}-{datasource}-extent-stats-{today}.xlsx"
+    outfile = f"{workbook_id}-extent-stats-{today}.xlsx"
     outpath = os.path.join(outdir, outfile)
     workbook = xlsxwriter.Workbook(outpath)
     bold_format = workbook.add_format({'bold': True})
@@ -69,7 +69,7 @@ def report(workbook_id, prefixes, datasource, query_db):
 
     # create a file to contain a list of all docs for QA purposes
     doclist_dir = os.path.join(os.getcwd(), f"doclists-{datasource}-{today}")
-    doclist_file = f"{workbook_id}-{datasource}-doclist-{today}.txt"
+    doclist_file = f"{workbook_id}-doclist-{today}.txt"
     doclist_path = os.path.join(doclist_dir, doclist_file)
     if os.path.exists(doclist_path):
         os.remove(doclist_path)
@@ -122,6 +122,13 @@ def report(workbook_id, prefixes, datasource, query_db):
     write_stats(summary_stats, summary_worksheet, row, rowname)
 
     workbook.close()
+
+    # load files to S3
+    report_prefix = REPORT_PREFIXES[datasource]
+    load_to_s3(report_prefix, campus, outfile, outpath)
+    load_to_s3(report_prefix, campus, doclist_file, doclist_path)
+
+    # delete local files?
 
 def get_stats(prefix, doclist_path, query_db):
 
@@ -311,4 +318,18 @@ def get_metadata_from_db(uid):
     response.raise_for_status()
     json_resp = response.json()
     return json_resp
+
+def load_to_s3(report_prefix, campus, filename, filepath):
+    s3_client = boto3.client('s3')
+    s3_key = f"{report_prefix}/{campus}/{filename}"
+
+    print(f"loading to s3 bucket {BUCKET} with key {s3_key}")
+    try:
+        response = s3_client.upload_file(
+            Filename=filepath,
+            Bucket=BUCKET,
+            Key=s3_key
+        )
+    except Exception as e:
+            print(f"ERROR loading to S3: {e}")
 
