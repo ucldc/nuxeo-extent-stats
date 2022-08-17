@@ -73,3 +73,7 @@ To create reports for all campuses while the Nuxeo API is broken:
 ```
 docker exec nuxeoextent-db python create_reports.py --all --es_api_broken
 ```
+
+### TO DO
+
+* set this up to run on AWS Fargate (once the Nuxeo API is fixed?)
