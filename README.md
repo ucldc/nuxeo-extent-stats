@@ -68,8 +68,8 @@ docker exec nuxeoextent python fetch_metadata.py --all
 
 Make sure you have fetched the metadata as per above *before* creating the reports.
 
-To create reports for all campuses:
+To create reports for all campuses while the Nuxeo API is broken:
 
 ```
-docker exec nuxeoextent-db python create_reports.py --all
+docker exec nuxeoextent-db python create_reports.py --all --es_api_broken
 ```
