@@ -42,6 +42,21 @@ cp local.env env.local
 
 Then, populate `env.local` with the relevant values. `S3_BUCKET` is the name of the bucket to which the metadata and reports will be written.
 
+If you do not provide an `=` then docker will read the value from your local environment. (See [docker documentation on --env-file](https://docs.docker.com/engine/reference/commandline/run/#set-environment-variables--e---env---env-file)). So if you've set the AWS auth env vars locally, then your env.local file might look something like this:
+
+```
+NUXEO_TOKEN=xxxxxxx-xxxx-xxxx-xxxx-xxxxxxx
+NUXEO_API_BASE=https://nuxeo.cdlib.org/nuxeo
+NUXEO_API_PATH=site/api/v1
+ES_ENDPOINT=https://example-url-elasticsearch-west-2.es.amazonaws.com
+ES_INDEX=nuxeo
+S3_BUCKET=nuxeo-extent-stats
+
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+AWS_SESSION_TOKEN
+```
+
 Now, run the docker image in a container. Replace `/path/to/nuxeo-extent-stats` with your path to the `current_extent_stats` directory:
 
 ```
