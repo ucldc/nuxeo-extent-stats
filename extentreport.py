@@ -56,11 +56,7 @@ def report(workbook_id, prefixes, datasource):
     row += 1
 
     # create a file to contain a list of all docs for QA purposes
-    # FIXME
-    if datasource == 'es':
-        doclist_dir = os.path.join(os.getcwd(), f"doclists-elastic-{today}")
-    else:
-        doclist_dir = os.path.join(os.getcwd(), f"doclists-{datasource}-{today}")
+    doclist_dir = os.path.join(os.getcwd(), f"doclists-{datasource}-{today}")
     doclist_file = f"{workbook_id}-doclist-{today}.txt"
     doclist_path = os.path.join(doclist_dir, doclist_file)
     if os.path.exists(doclist_path):
