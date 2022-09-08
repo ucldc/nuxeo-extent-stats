@@ -50,6 +50,8 @@ def report(workbook_id, campus, prefixes, datasource, query_db):
         "Doc Count",
         "Unique Main File Count",
         "Main File Size",
+        "Unique Files Tab Count",
+        "Files Tab Count",
         "Unique Aux File Count",
         "Aux File Size",
         "Unique Derivative File Count",
@@ -80,6 +82,8 @@ def report(workbook_id, campus, prefixes, datasource, query_db):
     summary_stats = {
         "main_count": 0,
         "main_size": 0,
+        "filetab_count": 0,
+        "filetab_size": 0,
         "aux_count": 0,
         "aux_size": 0,
         "deriv_count": 0,
@@ -109,6 +113,8 @@ def report(workbook_id, campus, prefixes, datasource, query_db):
         summary_doc_count += stats['doc_count']
         summary_stats['main_count'] += stats['main_count']
         summary_stats['main_size'] += stats['main_size']
+        summary_stats['filetab_count'] += stats['filetab_count']
+        summary_stats['filetab_size'] += stats['filetab_size']
         summary_stats['aux_count'] += stats['aux_count']
         summary_stats['aux_size'] += stats['aux_size']
         summary_stats['deriv_count'] += stats['deriv_count']
@@ -137,6 +143,8 @@ def get_stats(prefix, doclist_path, query_db):
     stats = {
         "main_count": 0,
         "main_size": 0,
+        "filetab_count": 0,
+        "filetab_size": 0,
         "aux_count": 0,
         "aux_size": 0,
         "deriv_count": 0,
@@ -182,6 +190,8 @@ def get_stats(prefix, doclist_path, query_db):
 
                 stats['main_count'] += doc_extent['main_count']
                 stats['main_size'] += doc_extent['main_size']
+                stats['filetab_count'] += doc_extent['filetab_count']
+                stats['filetab_size'] += doc_extent['filetab_size']
                 stats['aux_count'] += doc_extent['aux_count']
                 stats['aux_size'] += doc_extent['aux_size']
                 stats['deriv_count'] += doc_extent['deriv_count']
@@ -198,6 +208,8 @@ def get_extent(doc):
     extent = {
         "main_count": 0,
         "main_size": 0,
+        "filetab_count": 0,
+        "filetab_size": 0,
         "aux_count": 0,
         "aux_size": 0,
         "deriv_count": 0,
@@ -243,9 +255,9 @@ def get_extent(doc):
         for file in files:
             if file.get('file') and not file['file']['digest'] in MD5S:
                 file = file.get('file')
-                extent['main_count'] += 1
-                extent['main_size'] += int(file['length'])
-                #print(f"main {extent['main_count']} files:files {file['name']} {int(file['length'])}")
+                extent['filetab_count'] += 1
+                extent['filetab_size'] += int(file['length'])
+                #print(f"filetab {extent['filetab_count']} files:files {file['name']} {int(file['length'])}")
 
     # vid:storyboard
     if properties.get('vid:storyboard'):
@@ -285,8 +297,8 @@ def get_extent(doc):
                 extent['deriv_count'] += 1
                 extent['deriv_size'] += int(content['length'])
 
-    extent['total_count'] = extent['main_count'] + extent['deriv_count'] + extent['aux_count']
-    extent['total_size'] = extent['main_size'] + extent['deriv_size'] + extent['aux_size']
+    extent['total_count'] = extent['main_count'] + extent['filetab_count'] + extent['deriv_count'] + extent['aux_count']
+    extent['total_size'] = extent['main_size'] + extent['filetab_size'] + extent['deriv_size'] + extent['aux_size']
 
     return extent
 
@@ -297,6 +309,8 @@ def write_stats(stats, worksheet, rownum, rowname):
         stats['doc_count'],
         stats['main_count'],
         humanize.naturalsize(stats['main_size'], binary=True),
+        stats['filetab_count'],
+        humanize.naturalsize(stats['filetab_size'], binary=True),
         stats['aux_count'],
         humanize.naturalsize(stats['aux_size'], binary=True),
         stats['deriv_count'],
