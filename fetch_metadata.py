@@ -32,12 +32,18 @@ def main(params):
 
 
 def fetch_metadata(folders, campus, datasource):
+    parent_uids = [folder['parent_uid'] for folder in folders]
     for folder in folders:
+        if folder['uid'] in parent_uids:
+            has_subfolder = True
+        else:
+            has_subfolder = False
         next_page = {
             "campus": {campus},
             "path": folder['path'],
             "uid": folder['uid'],
-            "datasource": datasource
+            "datasource": datasource,
+            "has_subfolder": has_subfolder
         }
 
         while next_page:

@@ -45,7 +45,8 @@ def fetch_folders_recursive(start_uid, path, depth=-1):
                 folders.append(
                     {
                         'uid': record['uid'],
-                        'path': record['path']
+                        'path': record['path'],
+                        'parent_uid': uid
                     }
                 )
                 recurse(record['uid'], depth - 1)

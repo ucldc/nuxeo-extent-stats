@@ -2,6 +2,7 @@ import os
 import requests
 import urllib.parse
 import json
+import math
 
 DEBUG = os.environ.get('DEBUG', False)
 if DEBUG is False:
@@ -16,6 +17,8 @@ MD_PREFIX = {
     "db": "metadata",
     "es": "metadata-es"
 }
+PAGE_SIZE = 100
+ELASTICSEARCH_API_ENDPOINT_LIMIT = 10000
 
 CHILD_NXQL = "SELECT * FROM SampleCustomPicture, CustomFile, CustomVideo, CustomAudio, CustomThreeD " \
               "WHERE ecm:parentId = '{}' AND " \
@@ -42,6 +45,7 @@ class Fetcher(object):
         self.uid = params.get('uid', None)
         if self.uid is None:
             self.uid = self.get_nuxeo_uid_for_path(self.path)
+        self.has_subfolder = params.get('has_subfolder')
         self.current_page_index = params.get('current_page_index', 0)
         self.write_page = params.get('write_page', 0)
         self.datasource = params.get('datasource', 'es')
@@ -64,25 +68,23 @@ class Fetcher(object):
     def build_fetch_request(self):
         page = self.current_page_index
         if (page and page != -1) or page == 0:
-            if self.path.count('/') == 6:
-                # what about if there are more than 10k ancestors?
-                # e.g. /asset-library/UCM/UCCE/Tulare - component objects
-                # have to go one level deeper
-                query = ANCESTOR_NXQL.format(self.uid)
-            else:
+            if self.has_subfolder:
                 query = CHILD_NXQL.format(self.uid)
+            else:
+                query = ANCESTOR_NXQL.format(self.uid)
+
             headers = NUXEO_REQUEST_HEADERS
 
             if self.datasource == 'db':
                 url = u'/'.join([API_BASE, API_PATH, f"@search?query={query}"])
                 params = {
-                    'pageSize': '100',
+                    'pageSize': f'{PAGE_SIZE}',
                     'currentPageIndex': self.current_page_index
                 }
             else:
                 url = u'/'.join([API_BASE, API_PATH, "search/lang/NXQL/execute"])
                 params = {
-                    'pageSize': '100',
+                    'pageSize': f'{PAGE_SIZE}',
                     'currentPageIndex': self.current_page_index,
                     'query': query
                 }
@@ -91,8 +93,8 @@ class Fetcher(object):
             print(
                 f"Fetching page"
                 f" {request.get('params').get('currentPageIndex')} "
-                #f"at {request.get('url')} "
-                #f"with query {request.get('params').get('query')} "
+                f"at {request.get('url')} "
+                f"with query {request.get('params').get('query')} "
                 f"for path {self.path}"
                 )
         else:
@@ -116,8 +118,11 @@ class Fetcher(object):
     def get_records(self, http_resp):
         response = http_resp.json()
 
-        if response['resultsCount'] > 10000:
-            print(f"{response['resultsCount']} RESULTS FOR {self.path}")
+        if self.datasource == 'es':
+            results_count = response['resultsCount']
+            self.page_count = math.ceil(results_count / PAGE_SIZE)
+            if response['resultsCount'] > 10000:
+                print(f"{response['resultsCount']} RESULTS FOR {self.path}")
 
         documents = [doc for doc in response['entries']]
 
@@ -127,6 +132,10 @@ class Fetcher(object):
         resp = http_resp.json()
 
         if resp.get('isNextPageAvailable'):
+            self.current_page_index = self.current_page_index + 1
+            self.write_page = self.write_page + 1
+        # horrible hack to get around 10k limit using nuxeo search API endpoint
+        elif self.datasource == 'es' and self.current_page_index < self.page_count:
             self.current_page_index = self.current_page_index + 1
             self.write_page = self.write_page + 1
         else:
@@ -177,6 +186,8 @@ class Fetcher(object):
             "campus": self.campus,
             "path": self.path,
             "uid": self.uid,
+            "datasource": self.datasource,
+            "has_subfolder": self.has_subfolder,
             "current_page_index": self.current_page_index,
             "write_page": self.write_page
         }
