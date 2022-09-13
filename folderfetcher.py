@@ -5,6 +5,7 @@ import requests
 import json
 import boto3
 
+DEBUG = os.environ.get('DEBUG', False)
 NUXEO_TOKEN = os.environ.get('NUXEO_TOKEN')
 API_BASE = os.environ.get('NUXEO_API_BASE', 'https://nuxeo.cdlib.org/nuxeo/')
 API_PATH = os.environ.get('NUXEO_API_PATH', 'site/api/v1')
@@ -28,7 +29,10 @@ def fetch(path, outdir, depth=-1):
 
     folders = fetch_folders_recursive(uid, path, depth)
 
-    fetchtos3(outdir, folders)
+    if DEBUG:
+        fetchtolocal(outdir, folders)
+    else:
+        fetchtos3(outdir, folders)
 
     return folders
 
@@ -67,8 +71,17 @@ def run_folder_query(uid):
     }
     request = {'url': url, 'headers': headers, 'params': params} 
 
+    '''
+    print(
+        f"Fetching page"
+        f" {request.get('params').get('currentPageIndex')} "
+        f"at {request.get('url')} "
+        f"with query {request.get('params').get('query')} "
+        )
+    '''
+
     response = requests.get(**request)
-    response.raise_for_status()  
+    response.raise_for_status()
 
     return response
 

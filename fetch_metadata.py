@@ -21,7 +21,6 @@ CAMPUSES = [
 ]
 
 def main(params):
-
     if params.all:
         for campus in CAMPUSES:
             folders = get_folder_list(campus, params.no_folder_refresh)
@@ -29,7 +28,6 @@ def main(params):
     elif params.campus:
         folders = get_folder_list(params.campus, params.no_folder_refresh)
         fetch_metadata(folders, params.campus, params.datasource)
-
 
 def fetch_metadata(folders, campus, datasource):
     parent_uids = [folder['parent_uid'] for folder in folders]
@@ -39,7 +37,7 @@ def fetch_metadata(folders, campus, datasource):
         else:
             has_subfolder = False
         next_page = {
-            "campus": {campus},
+            "campus": campus,
             "path": folder['path'],
             "uid": folder['uid'],
             "datasource": datasource,
@@ -59,8 +57,8 @@ def get_folder_list(campus, no_refresh):
     else:
         # fetch list of folders and stash on s3
         campus_basepath = f"/asset-library/{campus}"
-        # fetch folders to a depth of 4
-        folders = folderfetcher.fetch(campus_basepath, campus, 4)
+        # fetch folders to a depth of 1
+        folders = folderfetcher.fetch(campus_basepath, campus, 1)
 
     return folders
 

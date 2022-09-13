@@ -24,9 +24,9 @@ def main():
         # get folders for each campus
         campus_basepath = f"/asset-library/{campus}"
 
-        # fetch folders to a depth of 3
+        # fetch folders to a depth of 1
         print(f"fetching folders for {campus_basepath}")
-        folderfetcher.fetch(campus_basepath, campus, 3)
+        folderfetcher.fetch(campus_basepath, campus, 1)
 
 if __name__ == "__main__":
     sys.exit(main())
