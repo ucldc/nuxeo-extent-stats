@@ -45,7 +45,6 @@ class Fetcher(object):
         self.uid = params.get('uid', None)
         if self.uid is None:
             self.uid = self.get_nuxeo_uid_for_path(self.path)
-        self.has_subfolder = params.get('has_subfolder')
         self.current_page_index = params.get('current_page_index', 0)
         self.write_page = params.get('write_page', 0)
         self.datasource = params.get('datasource', 'es')
@@ -58,7 +57,7 @@ class Fetcher(object):
         records = self.get_records(response)
 
         if len(records) > 0:
-            if DEBUG is True:
+            if DEBUG:
                 self.fetchtolocal(records)
             else:
                 self.fetchtos3(records)
@@ -68,10 +67,7 @@ class Fetcher(object):
     def build_fetch_request(self):
         page = self.current_page_index
         if (page and page != -1) or page == 0:
-            if self.has_subfolder:
-                query = CHILD_NXQL.format(self.uid)
-            else:
-                query = ANCESTOR_NXQL.format(self.uid)
+            query = ANCESTOR_NXQL.format(self.uid)
 
             headers = NUXEO_REQUEST_HEADERS
 
