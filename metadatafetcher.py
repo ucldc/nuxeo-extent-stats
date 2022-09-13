@@ -183,7 +183,6 @@ class Fetcher(object):
             "path": self.path,
             "uid": self.uid,
             "datasource": self.datasource,
-            "has_subfolder": self.has_subfolder,
             "current_page_index": self.current_page_index,
             "write_page": self.write_page
         }
