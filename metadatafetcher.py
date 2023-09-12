@@ -140,10 +140,8 @@ class Fetcher(object):
         return
 
     def fetchtolocal(self, records):
-        nuxeo_path = self.path.lstrip(f'/asset-library/{self.campus}')
-        nuxeo_path = nuxeo_path.strip()
-        path = f"{os.getcwd()}/{self.campus}/{nuxeo_path}"
-        path = f"{os.getcwd()}/{self.md_prefix}/{self.campus}/{nuxeo_path}"
+        folder_path = self.path.removeprefix(f'/asset-library/')
+        path = f"{os.getcwd()}/{self.md_prefix}/{folder_path}"
         
         if not os.path.exists(path):
             os.makedirs(path)
@@ -158,7 +156,7 @@ class Fetcher(object):
 
     def fetchtos3(self, records):
         s3_client = boto3.client('s3')
-        folder_path = self.path.lstrip('/asset-library/')
+        folder_path = self.path.removeprefix('/asset-library/')
         s3_key = f"{self.md_prefix}/{folder_path}/{self.write_page}.jsonl"
 
         jsonl = "\n".join([json.dumps(record) for record in records])
