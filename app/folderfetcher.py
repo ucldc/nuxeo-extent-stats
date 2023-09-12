@@ -107,7 +107,7 @@ def get_records(http_resp):
     return documents, count
 
 def fetchtolocal(outdir, folders):
-    outdir = f"{os.getcwd()}/folders/{outdir}"
+    outdir = f"{os.getcwd()}/output/folders/{outdir}"
 
     if not os.path.exists(outdir):
         os.makedirs(outdir)

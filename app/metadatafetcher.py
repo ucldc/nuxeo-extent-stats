@@ -141,7 +141,7 @@ class Fetcher(object):
 
     def fetchtolocal(self, records):
         folder_path = self.path.removeprefix(f'/asset-library/')
-        path = f"{os.getcwd()}/{self.md_prefix}/{folder_path}"
+        path = f"{os.getcwd()}/output/{self.md_prefix}/{folder_path}"
         
         if not os.path.exists(path):
             os.makedirs(path)
