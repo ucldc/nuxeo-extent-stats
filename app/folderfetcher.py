@@ -5,22 +5,15 @@ import requests
 import json
 import boto3
 
-DEBUG = os.environ.get('DEBUG', False)
-NUXEO_TOKEN = os.environ.get('NUXEO_TOKEN')
 API_BASE = os.environ.get('NUXEO_API_BASE', 'https://nuxeo.cdlib.org/nuxeo')
 API_PATH = os.environ.get('NUXEO_API_PATH', 'site/api/v1')
-BUCKET = os.environ.get('S3_BUCKET')
-
-FOLDER_NXQL = "SELECT * FROM Organization " \
-                        "WHERE ecm:parentId = '{}' " \
-                        "AND ecm:isTrashed = 0"
 
 NUXEO_REQUEST_HEADERS = {
                 "Accept": "application/json",
                 "Content-Type": "application/json",
                 "X-NXDocumentProperties": "*",
                 "X-NXRepository": "default",
-                "X-Authentication-Token": NUXEO_TOKEN
+                "X-Authentication-Token": os.environ.get('NUXEO_TOKEN')
                 }
 
 ''' fetch list of all folders in nuxeo at a given path (including the top folder itself) '''
@@ -29,7 +22,7 @@ def fetch(path, outdir, depth=-1):
 
     folders = fetch_folders_recursive(uid, path, depth)
 
-    if DEBUG:
+    if os.environ.get('DEBUG', False):
         fetchtolocal(outdir, folders)
     else:
         fetchtos3(outdir, folders)
@@ -60,7 +53,9 @@ def fetch_folders_recursive(start_uid, path, depth=-1):
     return folders
 
 def run_folder_query(uid):
-    query = FOLDER_NXQL.format(uid)
+    query = f"SELECT * FROM Organization " \
+            f"WHERE ecm:parentId = '{uid}' " \
+            f"AND ecm:isTrashed = 0"
     url = u'/'.join([API_BASE, API_PATH, "search/lang/NXQL/execute"])
     headers = NUXEO_REQUEST_HEADERS
     page_size = 1000
@@ -124,14 +119,15 @@ def fetchtolocal(outdir, folders):
 def fetchtos3(prefix, folders):
     s3_client = boto3.client('s3')
 
+    bucket = os.environ.get('S3_BUCKET')
     body = json.dumps(folders)
     key = f"folders/{prefix}/folders.json"
-    print(f"loading to s3 bucket {BUCKET} with key {key}")
+    print(f"loading to s3 bucket {bucket} with key {key}")
     try:
         # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Client.put_object
         s3_client.put_object(
             ACL='bucket-owner-full-control',
-            Bucket=BUCKET,
+            Bucket=bucket,
             Key=key,
             Body=body)
     except Exception as e:
