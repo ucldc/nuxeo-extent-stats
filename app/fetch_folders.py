@@ -3,24 +3,9 @@ import json
 import folderfetcher
 import argparse
 
-BUCKET = os.environ.get('S3_BUCKET')
-
-campuses = [
-    "UCB",
-    "UCD",
-    "UCI",
-    "UCLA",
-    "UCM",
-    "UCOP",
-    "UCR",
-    "UCSB",
-    "UCSC",
-    "UCSD",
-    "UCSF",
-]
-
 def main(params):
     if params.all:
+        campuses = os.environ.get('CAMPUSES')
         for campus in campuses:
             fetch_folders(campus, params.depth)
     elif params.campus:

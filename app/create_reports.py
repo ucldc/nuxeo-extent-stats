@@ -9,21 +9,8 @@ def main(params):
     else:
         query_db = False
 
-    campuses = [
-        "UCB",
-        "UCD",
-        "UCI",
-        "UCLA",
-        "UCM",
-        "UCOP",
-        "UCR",
-        "UCSB",
-        "UCSC",
-        "UCSD",
-        "UCSF"
-    ]
-
     if params.all:
+        campuses = os.environ.get('CAMPUSES')
         sub_prefixes = []
         for campus in campuses:
             sub_prefixes = get_child_prefixes(campus, params.datasource)

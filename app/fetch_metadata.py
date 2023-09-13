@@ -6,19 +6,7 @@ import metadatafetcher
 import boto3
 
 def main(params):
-    campuses = [
-        "UCB",
-        "UCD",
-        "UCI",
-        "UCLA",
-        "UCM",
-        "UCOP",
-        "UCR",
-        "UCSB",
-        "UCSC",
-        "UCSD",
-        "UCSF",
-    ]
+    campuses = campuses = os.environ.get('CAMPUSES')
     if params.all:
         for campus in campuses:
             folders = get_folder_list(campus, params.no_folder_refresh)
