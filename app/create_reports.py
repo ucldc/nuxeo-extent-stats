@@ -3,34 +3,29 @@ import argparse
 import extentreport
 import boto3
 
-BUCKET = os.environ.get('S3_BUCKET')
-MD_PREFIX = {
-    "db": "metadata",
-    "es": "metadata-es"
-}
-CAMPUSES = [
-    "UCB",
-    "UCD",
-    "UCI",
-    "UCLA",
-    "UCM",
-    "UCOP",
-    "UCR",
-    "UCSB",
-    "UCSC",
-    "UCSD",
-    "UCSF"
-]
-
 def main(params):
     if params.datasource == 'es' and params.es_api_broken:
         query_db = True
     else:
         query_db = False
 
+    campuses = [
+        "UCB",
+        "UCD",
+        "UCI",
+        "UCLA",
+        "UCM",
+        "UCOP",
+        "UCR",
+        "UCSB",
+        "UCSC",
+        "UCSD",
+        "UCSF"
+    ]
+
     if params.all:
         sub_prefixes = []
-        for campus in CAMPUSES:
+        for campus in campuses:
             sub_prefixes = get_child_prefixes(campus, params.datasource)
             workbook_id = f"{campus}-{params.datasource}"
             extentreport.report(workbook_id, campus, sub_prefixes, params.datasource, query_db)
@@ -46,11 +41,15 @@ def main(params):
         extentreport.report(workbook_id, campus_equiv, sub_prefixes, params.datasource, query_db)
 
 def get_child_prefixes(folder, datasource):
-    folder_prefix = f"{MD_PREFIX[datasource]}/{folder.rstrip('/')}"
+    md_prefix = {
+        "db": "metadata",
+        "es": "metadata-es"
+    }
+    folder_prefix = f"{md_prefix[datasource]}/{folder.rstrip('/')}"
     s3_client = boto3.client('s3')
     paginator = s3_client.get_paginator('list_objects_v2')
     pages = paginator.paginate(
-        Bucket=BUCKET,
+        Bucket=os.environ.get('S3_BUCKET'),
         Prefix=folder_prefix
     )
 

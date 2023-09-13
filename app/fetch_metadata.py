@@ -5,24 +5,22 @@ import folderfetcher
 import metadatafetcher
 import boto3
 
-BUCKET = os.environ.get('S3_BUCKET')
-CAMPUSES = [
-    "UCB",
-    "UCD",
-    "UCI",
-    "UCLA",
-    "UCM",
-    "UCOP",
-    "UCR",
-    "UCSB",
-    "UCSC",
-    "UCSD",
-    "UCSF",
-]
-
 def main(params):
+    campuses = [
+        "UCB",
+        "UCD",
+        "UCI",
+        "UCLA",
+        "UCM",
+        "UCOP",
+        "UCR",
+        "UCSB",
+        "UCSC",
+        "UCSD",
+        "UCSF",
+    ]
     if params.all:
-        for campus in CAMPUSES:
+        for campus in campuses:
             folders = get_folder_list(campus, params.no_folder_refresh)
             fetch_metadata(folders, campus, params.datasource)
     elif params.campus:
@@ -62,7 +60,7 @@ def fetch_folder_list_from_s3(campus):
     key = f"folders/{campus}/folders.json"
     s3_client = boto3.client('s3')
     response = s3_client.get_object(
-        Bucket=BUCKET,
+        Bucket=os.environ.get('S3_BUCKET'),
         Key=key
     )
 

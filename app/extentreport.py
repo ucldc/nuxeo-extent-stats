@@ -8,22 +8,7 @@ import humanize
 import requests
 
 BUCKET = os.environ.get('S3_BUCKET')
-REPORT_PREFIXES = {
-    "es": "reports-es",
-    "db": "reports-db"
-}
 MD5S = []
-
-NUXEO_TOKEN = os.environ.get('NUXEO_TOKEN')
-API_BASE = os.environ.get('NUXEO_API_BASE', 'https://nuxeo.cdlib.org/nuxeo/')
-API_PATH = os.environ.get('NUXEO_API_PATH', 'site/api/v1')
-NUXEO_REQUEST_HEADERS = {
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "X-NXDocumentProperties": "*",
-                "X-NXRepository": "default",
-                "X-Authentication-Token": NUXEO_TOKEN
-                }
 
 def report(workbook_id, campus, prefixes, datasource, query_db):
     '''
@@ -135,7 +120,11 @@ def report(workbook_id, campus, prefixes, datasource, query_db):
     workbook.close()
 
     # load files to S3
-    report_prefix = REPORT_PREFIXES[datasource]
+    report_prefixes = {
+        "es": "reports-es",
+        "db": "reports-db"
+    }
+    report_prefix = report_prefixes[datasource]
     load_to_s3(report_prefix, campus, outfile, outpath)
     load_to_s3(report_prefix, campus, doclist_file, doclist_path)
 
@@ -331,8 +320,17 @@ def write_stats(stats, worksheet, rownum, rowname):
 
 def get_metadata_from_db(uid):
     # GET 'https://nuxeo.cdlib.org/nuxeo/site/api/v1/id/32f09ee0-dcc0-4746-90c4-ba4c710447cd' -H 'X-NXproperties: *' -H 'X-NXRepository: default' -H 'content-type: application/json' -u Administrator -p
-    url = u'/'.join([API_BASE, API_PATH, "id", uid])
-    request = {'url': url, 'headers': NUXEO_REQUEST_HEADERS}
+    api_base = os.environ.get('NUXEO_API_BASE', 'https://nuxeo.cdlib.org/nuxeo/')
+    api_path = os.environ.get('NUXEO_API_PATH', 'site/api/v1')
+    url = u'/'.join([api_base, api_path, "id", uid])
+    nuxeo_request_headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "X-NXDocumentProperties": "*",
+                "X-NXRepository": "default",
+                "X-Authentication-Token": os.environ.get('NUXEO_TOKEN')
+                }
+    request = {'url': url, 'headers': nuxeo_request_headers}
     response = requests.get(**request)
     response.raise_for_status()
     json_resp = response.json()

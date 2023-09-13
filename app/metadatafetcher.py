@@ -18,17 +18,6 @@ MD_PREFIX = {
     "es": "metadata-es"
 }
 PAGE_SIZE = 100
-ELASTICSEARCH_API_ENDPOINT_LIMIT = 10000
-
-CHILD_NXQL = "SELECT * FROM SampleCustomPicture, CustomFile, CustomVideo, CustomAudio, CustomThreeD " \
-              "WHERE ecm:parentId = '{}' AND " \
-              "ecm:isVersion = 0 AND " \
-              "ecm:isTrashed = 0 ORDER BY ecm:name" \
-
-ANCESTOR_NXQL = "SELECT * FROM SampleCustomPicture, CustomFile, CustomVideo, CustomAudio, CustomThreeD " \
-              "WHERE ecm:ancestorId = '{}' AND " \
-              "ecm:isVersion = 0 AND " \
-              "ecm:isTrashed = 0 ORDER BY ecm:name" \
 
 NUXEO_REQUEST_HEADERS = {
                 "Accept": "application/json",
@@ -67,7 +56,10 @@ class Fetcher(object):
     def build_fetch_request(self):
         page = self.current_page_index
         if (page and page != -1) or page == 0:
-            query = ANCESTOR_NXQL.format(self.uid)
+            query = f"SELECT * FROM SampleCustomPicture, CustomFile, CustomVideo, CustomAudio, CustomThreeD " \
+              f"WHERE ecm:ancestorId = '{self.uid}' AND " \
+              f"ecm:isVersion = 0 AND " \
+              f"ecm:isTrashed = 0 ORDER BY ecm:name"
 
             headers = NUXEO_REQUEST_HEADERS
 
