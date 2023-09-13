@@ -10,20 +10,24 @@ import requests
 BUCKET = os.environ.get('S3_BUCKET')
 MD5S = []
 
-def report(workbook_id, campus, prefixes, datasource, query_db):
+def report(campus, datasource, query_db):
     '''
-    given a list of s3 prefixes, create an xlsx spreadsheet
-    containing extent stats for metadata contained in jsonl
-    files with those prefixes
+    for a given campus:
+        - get metadata files for campus from S3
+        - parse out file stats metadata
+        - create spreadsheet of stats
     '''
 
     # create the excel workbook
     #today = datetime.now(pytz.timezone('US/Pacific')).strftime('%Y%m%d-%H%M')
     today = datetime.now(pytz.timezone('US/Pacific')).strftime('%Y%m%d')
-    outdir = os.path.join(os.getcwd(), "output", f"reports-{datasource}-{today}")
+    output_dir = os.path.join(os.getcwd(), "output")
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+    outdir = f"{output_dir}/reports-{datasource}-{today}"
     if not os.path.exists(outdir):
         os.mkdir(outdir)
-    outfile = f"{workbook_id}-extent-stats-{today}.xlsx"
+    outfile = f"{campus}-{datasource}-extent-stats-{today}.xlsx"
     outpath = os.path.join(outdir, outfile)
     workbook = xlsxwriter.Workbook(outpath)
     bold_format = workbook.add_format({'bold': True})
@@ -63,7 +67,7 @@ def report(workbook_id, campus, prefixes, datasource, query_db):
     if not os.path.exists(doclist_dir):
         os.mkdir(doclist_dir)
 
-    doclist_file = f"{workbook_id}-doclist-{today}.txt"
+    doclist_file = f"{campus}-{datasource}-doclist-{today}.txt"
     doclist_path = os.path.join(doclist_dir, doclist_file)
     if os.path.exists(doclist_path):
         os.remove(doclist_path)
@@ -81,6 +85,11 @@ def report(workbook_id, campus, prefixes, datasource, query_db):
         "total_count": 0,
         "total_size": 0
     }
+
+    if datasource == 'es':
+        prefixes = get_child_prefixes(f"metadata-es/{campus}")
+    else:
+        prefixes = get_child_prefixes(f"metadata/{campus}")
 
     for prefix in prefixes:
         print(f"getting stats for {prefix}")
@@ -129,6 +138,25 @@ def report(workbook_id, campus, prefixes, datasource, query_db):
     load_to_s3(report_prefix, campus, doclist_file, doclist_path)
 
     # delete local files?
+
+def get_child_prefixes(prefix):
+    s3_client = boto3.client('s3')
+    paginator = s3_client.get_paginator('list_objects_v2')
+    pages = paginator.paginate(
+        Bucket=os.environ.get('S3_BUCKET'),
+        Prefix=prefix
+    )
+
+    child_prefixes = []
+    folder_prefix_parts_count = len(prefix.split('/'))
+    for page in pages:
+        for item in page['Contents']:
+            parts = item['Key'].split('/')
+            child_prefix = '/'.join(parts[0:folder_prefix_parts_count + 1])
+            if not child_prefix in child_prefixes:
+                child_prefixes.append(child_prefix)
+
+    return child_prefixes
 
 def get_stats(prefix, doclist_path, query_db):
 

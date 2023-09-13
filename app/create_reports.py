@@ -7,7 +7,8 @@ import folderfetcher
 import metadatafetcher
 import extentreport
 
-def fetch_metadata(folders, campus, datasource):
+def fetch_metadata(campus, datasource):
+    folders = folderfetcher.fetch(f"/asset-library/{campus}", campus, 1)
     parent_uids = [folder['parent_uid'] for folder in folders]
     for folder in folders:
         next_page = {
@@ -23,33 +24,8 @@ def fetch_metadata(folders, campus, datasource):
             next_page = fetcher.next_page()
 
 
-def get_child_prefixes(folder, datasource):
-    md_prefix = {
-        "db": "metadata",
-        "es": "metadata-es"
-    }
-    folder_prefix = f"{md_prefix[datasource]}/{folder.rstrip('/')}"
-    s3_client = boto3.client('s3')
-    paginator = s3_client.get_paginator('list_objects_v2')
-    pages = paginator.paginate(
-        Bucket=os.environ.get('S3_BUCKET'),
-        Prefix=folder_prefix
-    )
-
-    prefixes = []
-    folder_prefix_parts_count = len(folder_prefix.split('/'))
-    for page in pages:
-        for item in page['Contents']:
-            parts = item['Key'].split('/')
-            child_prefix = '/'.join(parts[0:folder_prefix_parts_count + 1])
-            if not child_prefix in prefixes:
-                prefixes.append(child_prefix)
-
-    return prefixes
-
-
 def main(params):
-    if params.datasource == 'es' and params.es_api_broken:
+    if params.es_api_broken and params.datasource == 'es':
         query_db = True
     else:
         query_db = False
@@ -65,12 +41,9 @@ def main(params):
         print("**********************")
 
         if not params.reportonly:
-            folders = folderfetcher.fetch(f"/asset-library/{campus}", campus, 1)
-            fetch_metadata(folders, campus, params.datasource)
+            fetch_metadata(campus, params.datasource)
 
-        workbook_id = f"{campus}-{params.datasource}"
-        prefixes = get_child_prefixes(campus, params.datasource)
-        extentreport.report(workbook_id, campus, prefixes, params.datasource, query_db)
+        extentreport.report(campus, params.datasource, query_db)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="create nuxeo extent stats report(s)")
