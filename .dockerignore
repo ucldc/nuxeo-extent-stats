@@ -4,5 +4,6 @@ __pycache__
 env.local
 local.env
 output
+*/output
 OLD
 README.md
