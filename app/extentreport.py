@@ -35,7 +35,7 @@ def report(workbook_id, campus, prefixes, datasource, query_db):
     # create the excel workbook
     #today = datetime.now(pytz.timezone('US/Pacific')).strftime('%Y%m%d-%H%M')
     today = datetime.now(pytz.timezone('US/Pacific')).strftime('%Y%m%d')
-    outdir = os.path.join(os.getcwd(), f"reports-{datasource}-{today}")
+    outdir = os.path.join(os.getcwd(), "output", f"reports-{datasource}-{today}")
     if not os.path.exists(outdir):
         os.mkdir(outdir)
     outfile = f"{workbook_id}-extent-stats-{today}.xlsx"
@@ -70,13 +70,18 @@ def report(workbook_id, campus, prefixes, datasource, query_db):
     row += 1
 
     # create a file to contain a list of all docs for QA purposes
-    doclist_dir = os.path.join(os.getcwd(), 'output', f"doclists-{datasource}-{today}")
+    output_dir = os.path.join(os.getcwd(), 'output')
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+
+    doclist_dir = os.path.join(output_dir, f"doclists-{datasource}-{today}")
+    if not os.path.exists(doclist_dir):
+        os.mkdir(doclist_dir)
+
     doclist_file = f"{workbook_id}-doclist-{today}.txt"
     doclist_path = os.path.join(doclist_dir, doclist_file)
     if os.path.exists(doclist_path):
         os.remove(doclist_path)
-    if not os.path.exists(doclist_dir):
-        os.mkdir(doclist_dir)
 
     summary_doc_count = 0
     summary_stats = {
