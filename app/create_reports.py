@@ -8,11 +8,6 @@ import metadatafetcher
 import extentreport
 
 def main(params):
-    if params.es_api_broken and params.datasource == 'es':
-        query_db = True
-    else:
-        query_db = False
-
     if params.campus:
         campuses = [params.campus]
     elif params.all:
@@ -38,7 +33,7 @@ def main(params):
                     fetcher.fetch_page()
                     next_page = fetcher.next_page()
 
-        extentreport.report(campus, params.datasource, query_db)
+        extentreport.report(campus, params.datasource)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="create nuxeo extent stats report(s)")
@@ -47,7 +42,6 @@ if __name__ == "__main__":
     top_folder.add_argument('--campus', help="single campus")
     parser.add_argument('--derivatives', help="include derivatives in file count", default=True)
     parser.add_argument('--datasource', choices=['es', 'db'], help="metadata source: es (elasticsearch) or db (database)", default='es')
-    parser.add_argument('--es_api_broken', action="store_true", help="set this option when the Nuxeo elasticsearch API is broken")
     parser.add_argument('--reportonly', action="store_true", help="set this option when the metadata already exists on S3 and does not need to be fetched")
 
     args = parser.parse_args()

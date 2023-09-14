@@ -10,7 +10,7 @@ import requests
 BUCKET = os.environ.get('S3_BUCKET')
 MD5S = []
 
-def report(campus, datasource, query_db):
+def report(campus, datasource):
     '''
     for a given campus:
         - get metadata files for campus from S3
@@ -93,7 +93,7 @@ def report(campus, datasource, query_db):
 
     for prefix in prefixes:
         print(f"getting stats for {prefix}")
-        stats = get_stats(prefix, doclist_path, query_db)
+        stats = get_stats(prefix, doclist_path)
 
         rowname = prefix.split('/')[-1]
         write_stats(stats, summary_worksheet, row, rowname)
@@ -158,7 +158,7 @@ def get_child_prefixes(prefix):
 
     return child_prefixes
 
-def get_stats(prefix, doclist_path, query_db):
+def get_stats(prefix, doclist_path):
 
     doc_count = 0
 
@@ -202,7 +202,7 @@ def get_stats(prefix, doclist_path, query_db):
                 #print(f"{doc_count} {doc['path']}")
 
                 # query db for each record as a workaround while ES API endpoint is broken
-                if query_db:
+                if os.environ.get('NUXEO_API_ES_ENDPOINT_BROKEN', False):
                     uid = doc['uid']
                     doc_md = get_metadata_from_db(uid)
                 else:
