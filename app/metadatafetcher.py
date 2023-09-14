@@ -33,7 +33,7 @@ class Fetcher(object):
             self.uid = self.get_nuxeo_uid_for_path(self.path)
         self.current_page_index = params.get('current_page_index', 0)
         self.write_page = params.get('write_page', 0)
-        self.md_prefix = "metadata-es"
+        #self.md_prefix = "metadata"
 
     def fetch_page(self):
         page = self.build_fetch_request()
@@ -121,7 +121,7 @@ class Fetcher(object):
 
     def fetchtolocal(self, records):
         folder_path = self.path.removeprefix(f'/asset-library/')
-        path = f"{os.getcwd()}/output/{self.md_prefix}/{folder_path}"
+        path = f"{os.getcwd()}/output/metadata/{folder_path}"
         
         if not os.path.exists(path):
             os.makedirs(path)
@@ -137,7 +137,7 @@ class Fetcher(object):
     def fetchtos3(self, records):
         s3_client = boto3.client('s3')
         folder_path = self.path.removeprefix('/asset-library/')
-        s3_key = f"{self.md_prefix}/{folder_path}/{self.write_page}.jsonl"
+        s3_key = f"metadata/{folder_path}/{self.write_page}.jsonl"
 
         jsonl = "\n".join([json.dumps(record) for record in records])
 

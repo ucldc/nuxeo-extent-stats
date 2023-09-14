@@ -86,7 +86,7 @@ def report(campus):
         "total_size": 0
     }
 
-    prefixes = get_child_prefixes(f"metadata-es/{campus}")
+    prefixes = get_child_prefixes(f"metadata/{campus}")
 
     for prefix in prefixes:
         print(f"getting stats for {prefix}")
@@ -126,7 +126,7 @@ def report(campus):
     workbook.close()
 
     # load files to S3
-    report_prefix = "reports-es"
+    report_prefix = "reports"
     load_to_s3(report_prefix, campus, outfile, outpath)
     load_to_s3(report_prefix, campus, doclist_file, doclist_path)
 
