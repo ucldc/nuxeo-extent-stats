@@ -7,23 +7,6 @@ import folderfetcher
 import metadatafetcher
 import extentreport
 
-def fetch_metadata(campus, datasource):
-    folders = folderfetcher.fetch(f"/asset-library/{campus}", campus, 1)
-    parent_uids = [folder['parent_uid'] for folder in folders]
-    for folder in folders:
-        next_page = {
-            "campus": campus,
-            "path": folder['path'],
-            "uid": folder['uid'],
-            "datasource": datasource
-        }
-
-        while next_page:
-            fetcher = metadatafetcher.Fetcher(next_page)
-            fetcher.fetch_page()
-            next_page = fetcher.next_page()
-
-
 def main(params):
     if params.es_api_broken and params.datasource == 'es':
         query_db = True
@@ -41,7 +24,19 @@ def main(params):
         print("**********************")
 
         if not params.reportonly:
-            fetch_metadata(campus, params.datasource)
+            folders = folderfetcher.fetch(f"/asset-library/{campus}", campus, 1)
+            for folder in folders:
+                next_page = {
+                    "campus": campus,
+                    "path": folder['path'],
+                    "uid": folder['uid'],
+                    "datasource": params.datasource
+                }
+
+                while next_page:
+                    fetcher = metadatafetcher.Fetcher(next_page)
+                    fetcher.fetch_page()
+                    next_page = fetcher.next_page()
 
         extentreport.report(campus, params.datasource, query_db)
 
