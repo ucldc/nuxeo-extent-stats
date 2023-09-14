@@ -13,10 +13,7 @@ API_BASE = os.environ.get('NUXEO_API_BASE', 'https://nuxeo.cdlib.org/nuxeo/')
 API_PATH = os.environ.get('NUXEO_API_PATH', 'site/api/v1')
 BUCKET = os.environ.get('S3_BUCKET')
 # FIXME
-MD_PREFIX = {
-    "db": "metadata",
-    "es": "metadata-es"
-}
+
 PAGE_SIZE = 100
 
 NUXEO_REQUEST_HEADERS = {
@@ -36,8 +33,7 @@ class Fetcher(object):
             self.uid = self.get_nuxeo_uid_for_path(self.path)
         self.current_page_index = params.get('current_page_index', 0)
         self.write_page = params.get('write_page', 0)
-        self.datasource = params.get('datasource', 'es')
-        self.md_prefix = MD_PREFIX[self.datasource]
+        self.md_prefix = "metadata-es"
 
     def fetch_page(self):
         page = self.build_fetch_request()
@@ -63,19 +59,12 @@ class Fetcher(object):
 
             headers = NUXEO_REQUEST_HEADERS
 
-            if self.datasource == 'db':
-                url = u'/'.join([API_BASE, API_PATH, f"@search?query={query}"])
-                params = {
-                    'pageSize': f'{PAGE_SIZE}',
-                    'currentPageIndex': self.current_page_index
-                }
-            else:
-                url = u'/'.join([API_BASE, API_PATH, "search/lang/NXQL/execute"])
-                params = {
-                    'pageSize': f'{PAGE_SIZE}',
-                    'currentPageIndex': self.current_page_index,
-                    'query': query
-                }
+            url = u'/'.join([API_BASE, API_PATH, "search/lang/NXQL/execute"])
+            params = {
+                'pageSize': f'{PAGE_SIZE}',
+                'currentPageIndex': self.current_page_index,
+                'query': query
+            }
 
             request = {'url': url, 'headers': headers, 'params': params}
             print(
@@ -106,11 +95,10 @@ class Fetcher(object):
     def get_records(self, http_resp):
         response = http_resp.json()
 
-        if self.datasource == 'es':
-            results_count = response['resultsCount']
-            self.page_count = math.ceil(results_count / PAGE_SIZE)
-            if response['resultsCount'] > 10000:
-                print(f"{response['resultsCount']} RESULTS FOR {self.path}")
+        results_count = response['resultsCount']
+        self.page_count = math.ceil(results_count / PAGE_SIZE)
+        if response['resultsCount'] > 10000:
+            print(f"{response['resultsCount']} RESULTS FOR {self.path}")
 
         documents = [doc for doc in response['entries']]
 
@@ -123,7 +111,7 @@ class Fetcher(object):
             self.current_page_index = self.current_page_index + 1
             self.write_page = self.write_page + 1
         # horrible hack to get around 10k limit using nuxeo search API endpoint
-        elif self.datasource == 'es' and self.current_page_index < self.page_count:
+        elif self.current_page_index < self.page_count:
             self.current_page_index = self.current_page_index + 1
             self.write_page = self.write_page + 1
         else:
@@ -172,7 +160,6 @@ class Fetcher(object):
             "campus": self.campus,
             "path": self.path,
             "uid": self.uid,
-            "datasource": self.datasource,
             "current_page_index": self.current_page_index,
             "write_page": self.write_page
         }

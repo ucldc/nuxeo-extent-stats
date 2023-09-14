@@ -10,7 +10,7 @@ import requests
 BUCKET = os.environ.get('S3_BUCKET')
 MD5S = []
 
-def report(campus, datasource):
+def report(campus):
     '''
     for a given campus:
         - get metadata files for campus from S3
@@ -24,10 +24,10 @@ def report(campus, datasource):
     output_dir = os.path.join(os.getcwd(), "output")
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
-    outdir = f"{output_dir}/reports-{datasource}-{today}"
+    outdir = f"{output_dir}/reports-{today}"
     if not os.path.exists(outdir):
         os.mkdir(outdir)
-    outfile = f"{campus}-{datasource}-extent-stats-{today}.xlsx"
+    outfile = f"{campus}-extent-stats-{today}.xlsx"
     outpath = os.path.join(outdir, outfile)
     workbook = xlsxwriter.Workbook(outpath)
     bold_format = workbook.add_format({'bold': True})
@@ -63,11 +63,11 @@ def report(campus, datasource):
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
 
-    doclist_dir = os.path.join(output_dir, f"doclists-{datasource}-{today}")
+    doclist_dir = os.path.join(output_dir, f"doclists-{today}")
     if not os.path.exists(doclist_dir):
         os.mkdir(doclist_dir)
 
-    doclist_file = f"{campus}-{datasource}-doclist-{today}.txt"
+    doclist_file = f"{campus}-doclist-{today}.txt"
     doclist_path = os.path.join(doclist_dir, doclist_file)
     if os.path.exists(doclist_path):
         os.remove(doclist_path)
@@ -86,10 +86,7 @@ def report(campus, datasource):
         "total_size": 0
     }
 
-    if datasource == 'es':
-        prefixes = get_child_prefixes(f"metadata-es/{campus}")
-    else:
-        prefixes = get_child_prefixes(f"metadata/{campus}")
+    prefixes = get_child_prefixes(f"metadata-es/{campus}")
 
     for prefix in prefixes:
         print(f"getting stats for {prefix}")
@@ -129,11 +126,7 @@ def report(campus, datasource):
     workbook.close()
 
     # load files to S3
-    report_prefixes = {
-        "es": "reports-es",
-        "db": "reports-db"
-    }
-    report_prefix = report_prefixes[datasource]
+    report_prefix = "reports-es"
     load_to_s3(report_prefix, campus, outfile, outpath)
     load_to_s3(report_prefix, campus, doclist_file, doclist_path)
 

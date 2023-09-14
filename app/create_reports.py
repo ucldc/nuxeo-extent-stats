@@ -24,8 +24,7 @@ def main(params):
                 next_page = {
                     "campus": campus,
                     "path": folder['path'],
-                    "uid": folder['uid'],
-                    "datasource": params.datasource
+                    "uid": folder['uid']
                 }
 
                 while next_page:
@@ -33,15 +32,13 @@ def main(params):
                     fetcher.fetch_page()
                     next_page = fetcher.next_page()
 
-        extentreport.report(campus, params.datasource)
+        extentreport.report(campus)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="create nuxeo extent stats report(s)")
     top_folder = parser.add_mutually_exclusive_group(required=True)
     top_folder.add_argument('--all', help="create reports for all campuses", action="store_true")
     top_folder.add_argument('--campus', help="single campus")
-    parser.add_argument('--derivatives', help="include derivatives in file count", default=True)
-    parser.add_argument('--datasource', choices=['es', 'db'], help="metadata source: es (elasticsearch) or db (database)", default='es')
     parser.add_argument('--reportonly', action="store_true", help="set this option when the metadata already exists on S3 and does not need to be fetched")
 
     args = parser.parse_args()
