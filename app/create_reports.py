@@ -12,7 +12,7 @@ def main(params):
     if params.campus:
         campuses = [params.campus]
     elif params.all:
-        campuses = setings.CAMPUSES
+        campuses = settings.CAMPUSES
 
     for campus in campuses:
         print("**********************")
