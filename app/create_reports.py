@@ -39,7 +39,7 @@ if __name__ == "__main__":
     top_folder = parser.add_mutually_exclusive_group(required=True)
     top_folder.add_argument('--all', help="create reports for all campuses", action="store_true")
     top_folder.add_argument('--campus', help="single campus")
-    parser.add_argument('--reportonly', action="store_true", help="set this option when the metadata already exists on S3 and does not need to be fetched")
+    parser.add_argument('--reportonly', action="store_true", help="metadata already exists on S3 and does not need to be fetched")
 
     args = parser.parse_args()
     sys.exit(main(args))

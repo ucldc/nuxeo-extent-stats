@@ -8,11 +8,8 @@ DEBUG = os.environ.get('DEBUG', False)
 if DEBUG is False:
     import boto3
 
-NUXEO_TOKEN = os.environ.get('NUXEO_TOKEN')
 API_BASE = os.environ.get('NUXEO_API_BASE', 'https://nuxeo.cdlib.org/nuxeo/')
 API_PATH = os.environ.get('NUXEO_API_PATH', 'site/api/v1')
-BUCKET = os.environ.get('S3_BUCKET')
-# FIXME
 
 PAGE_SIZE = 100
 
@@ -21,7 +18,7 @@ NUXEO_REQUEST_HEADERS = {
                 "Content-Type": "application/json",
                 "X-NXDocumentProperties": "*",
                 "X-NXRepository": "default",
-                "X-Authentication-Token": NUXEO_TOKEN
+                "X-Authentication-Token": os.environ.get('NUXEO_TOKEN')
                 }
 
 class Fetcher(object):
@@ -67,6 +64,7 @@ class Fetcher(object):
             }
 
             request = {'url': url, 'headers': headers, 'params': params}
+            '''
             print(
                 f"Fetching page"
                 f" {request.get('params').get('currentPageIndex')} "
@@ -74,6 +72,7 @@ class Fetcher(object):
                 f"with query {request.get('params').get('query')} "
                 f"for path {self.path}"
                 )
+            '''
         else:
             request = None
             print("No more pages to fetch")
@@ -130,23 +129,24 @@ class Fetcher(object):
         f = open(filename, "w+")
 
         jsonl = "\n".join([json.dumps(record) for record in records])
-        print(f"writing to {filename}")
+        print(f"Writing file://{filename}")
         f.write(jsonl)
         f.write("\n")
 
     def fetchtos3(self, records):
         s3_client = boto3.client('s3')
+        bucket = os.environ.get('S3_BUCKET')
         folder_path = self.path.removeprefix('/asset-library/')
         s3_key = f"metadata/{folder_path}/{self.write_page}.jsonl"
 
         jsonl = "\n".join([json.dumps(record) for record in records])
 
-        print(f"loading to s3 bucket {BUCKET} with key {s3_key}")
+        print(f"Writing s3://{bucket}/{s3_key}")
         try:
             # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Client.put_object
             s3_client.put_object(
                 ACL='bucket-owner-full-control',
-                Bucket=BUCKET,
+                Bucket=bucket,
                 Key=s3_key,
                 Body=jsonl)
         except Exception as e:

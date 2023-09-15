@@ -112,7 +112,7 @@ def fetchtolocal(outdir, folders):
 
     body = json.dumps(folders)
 
-    print(f"writing to {filename}")
+    print(f"Writing file://{filename}")
     f.write(body)
     f.write("\n")
 
@@ -122,7 +122,7 @@ def fetchtos3(prefix, folders):
     bucket = os.environ.get('S3_BUCKET')
     body = json.dumps(folders)
     key = f"folders/{prefix}/folders.json"
-    print(f"loading to s3 bucket {bucket} with key {key}")
+    print(f"Writing s3://{bucket}/{key}")
     try:
         # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Client.put_object
         s3_client.put_object(

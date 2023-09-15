@@ -89,7 +89,7 @@ def report(campus):
     prefixes = get_child_prefixes(f"metadata/{campus}")
 
     for prefix in prefixes:
-        print(f"getting stats for {prefix}")
+        print(f"Aggregating stats for {prefix}")
         stats = get_stats(prefix, doclist_path)
 
         rowname = prefix.split('/')[-1]
@@ -361,7 +361,7 @@ def load_to_s3(report_prefix, campus, filename, filepath):
     s3_client = boto3.client('s3')
     s3_key = f"{report_prefix}/{campus}/{filename}"
 
-    print(f"loading to s3 bucket {BUCKET} with key {s3_key}")
+    print(f"Writing s3://{BUCKET}/{s3_key}")
     try:
         response = s3_client.upload_file(
             Filename=filepath,
