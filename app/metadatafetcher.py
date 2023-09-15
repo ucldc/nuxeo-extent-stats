@@ -4,22 +4,12 @@ import urllib.parse
 import json
 import math
 
-DEBUG = os.environ.get('DEBUG', False)
-if DEBUG is False:
+import settings
+
+if settings.DEBUG is False:
     import boto3
 
-API_BASE = os.environ.get('NUXEO_API_BASE', 'https://nuxeo.cdlib.org/nuxeo/')
-API_PATH = os.environ.get('NUXEO_API_PATH', 'site/api/v1')
-
 PAGE_SIZE = 100
-
-NUXEO_REQUEST_HEADERS = {
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "X-NXDocumentProperties": "*",
-                "X-NXRepository": "default",
-                "X-Authentication-Token": os.environ.get('NUXEO_TOKEN')
-                }
 
 class Fetcher(object):
     def __init__(self, params):
@@ -39,7 +29,7 @@ class Fetcher(object):
         records = self.get_records(response)
 
         if len(records) > 0:
-            if DEBUG:
+            if settings.DEBUG:
                 self.fetchtolocal(records)
             else:
                 self.fetchtos3(records)
@@ -54,9 +44,9 @@ class Fetcher(object):
               f"ecm:isVersion = 0 AND " \
               f"ecm:isTrashed = 0 ORDER BY ecm:name"
 
-            headers = NUXEO_REQUEST_HEADERS
+            headers = settings.NUXEO_REQUEST_HEADERS
 
-            url = u'/'.join([API_BASE, API_PATH, "search/lang/NXQL/execute"])
+            url = u'/'.join([settings.NUXEO_API, "search/lang/NXQL/execute"])
             params = {
                 'pageSize': f'{PAGE_SIZE}',
                 'currentPageIndex': self.current_page_index,
@@ -82,8 +72,8 @@ class Fetcher(object):
     def get_nuxeo_uid_for_path(self, path):
         ''' get nuxeo uid for doc at given path '''
         escaped_path = urllib.parse.quote(path, safe=' /')
-        url = u'/'.join([API_BASE, API_PATH, "path", escaped_path.strip('/')])
-        headers = NUXEO_REQUEST_HEADERS
+        url = u'/'.join([settings.NUXEO_API, "path", escaped_path.strip('/')])
+        headers = settings.NUXEO_REQUEST_HEADERS
         request = {'url': url, 'headers': headers}
         response = requests.get(**request)
         response.raise_for_status()
@@ -135,7 +125,7 @@ class Fetcher(object):
 
     def fetchtos3(self, records):
         s3_client = boto3.client('s3')
-        bucket = os.environ.get('S3_BUCKET')
+        bucket = settings.S3_BUCKET
         folder_path = self.path.removeprefix('/asset-library/')
         s3_key = f"metadata/{folder_path}/{self.write_page}.jsonl"
 

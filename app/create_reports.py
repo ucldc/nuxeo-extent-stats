@@ -3,15 +3,16 @@ import argparse
 
 import boto3
 
+import extentreport
 import folderfetcher
 import metadatafetcher
-import extentreport
+import settings
 
 def main(params):
     if params.campus:
         campuses = [params.campus]
     elif params.all:
-        campuses = os.environ.get('CAMPUSES')
+        campuses = setings.CAMPUSES
 
     for campus in campuses:
         print("**********************")
@@ -19,7 +20,7 @@ def main(params):
         print("**********************")
 
         if not params.reportonly:
-            folders = folderfetcher.fetch(f"/asset-library/{campus}", campus, 1)
+            folders = folderfetcher.fetch_folder_list(f"/asset-library/{campus}", campus, 1)
             for folder in folders:
                 next_page = {
                     "campus": campus,

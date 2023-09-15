@@ -1,28 +1,20 @@
+import json
 import os
+import requests
 import sys
 import urllib.parse
-import requests
-import json
+
 import boto3
 
-API_BASE = os.environ.get('NUXEO_API_BASE', 'https://nuxeo.cdlib.org/nuxeo')
-API_PATH = os.environ.get('NUXEO_API_PATH', 'site/api/v1')
-
-NUXEO_REQUEST_HEADERS = {
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "X-NXDocumentProperties": "*",
-                "X-NXRepository": "default",
-                "X-Authentication-Token": os.environ.get('NUXEO_TOKEN')
-                }
+import settings
 
 ''' fetch list of all folders in nuxeo at a given path (including the top folder itself) '''
-def fetch(path, outdir, depth=-1):
+def fetch_folder_list(path, outdir, depth=-1):
     uid = get_nuxeo_uid_for_path(path)
 
     folders = fetch_folders_recursive(uid, path, depth)
 
-    if os.environ.get('DEBUG', False):
+    if settings.DEBUG:
         fetchtolocal(outdir, folders)
     else:
         fetchtos3(outdir, folders)
@@ -56,8 +48,8 @@ def run_folder_query(uid):
     query = f"SELECT * FROM Organization " \
             f"WHERE ecm:parentId = '{uid}' " \
             f"AND ecm:isTrashed = 0"
-    url = u'/'.join([API_BASE, API_PATH, "search/lang/NXQL/execute"])
-    headers = NUXEO_REQUEST_HEADERS
+    url = u'/'.join([settings.NUXEO_API, "search/lang/NXQL/execute"])
+    headers = settings.NUXEO_REQUEST_HEADERS
     page_size = 1000
     params = {
         'pageSize': page_size,
@@ -83,8 +75,8 @@ def run_folder_query(uid):
 def get_nuxeo_uid_for_path(path):
     ''' get nuxeo uid for doc at given path '''
     escaped_path = urllib.parse.quote(path, safe=' /')
-    url = u'/'.join([API_BASE, API_PATH, "path", escaped_path.strip('/')])
-    headers = NUXEO_REQUEST_HEADERS
+    url = u'/'.join([settings.NUXEO_API, "path", escaped_path.strip('/')])
+    headers = settings.NUXEO_REQUEST_HEADERS
     request = {'url': url, 'headers': headers}
     response = requests.get(**request)
     response.raise_for_status()
@@ -119,7 +111,7 @@ def fetchtolocal(outdir, folders):
 def fetchtos3(prefix, folders):
     s3_client = boto3.client('s3')
 
-    bucket = os.environ.get('S3_BUCKET')
+    bucket = settings.S3_BUCKET
     body = json.dumps(folders)
     key = f"folders/{prefix}/folders.json"
     print(f"Writing s3://{bucket}/{key}")

@@ -7,7 +7,8 @@ import pytz
 import humanize
 import requests
 
-BUCKET = os.environ.get('S3_BUCKET')
+import settings
+
 MD5S = []
 
 def report(campus):
@@ -136,7 +137,7 @@ def get_child_prefixes(prefix):
     s3_client = boto3.client('s3')
     paginator = s3_client.get_paginator('list_objects_v2')
     pages = paginator.paginate(
-        Bucket=os.environ.get('S3_BUCKET'),
+        Bucket=settings.S3_BUCKET,
         Prefix=prefix
     )
 
@@ -172,7 +173,7 @@ def get_stats(prefix, doclist_path):
     s3_client = boto3.client('s3')
     paginator = s3_client.get_paginator('list_objects_v2')
     pages = paginator.paginate(
-        Bucket=BUCKET,
+        Bucket=settings.S3_BUCKET,
         Prefix=prefix
     )
 
@@ -181,7 +182,7 @@ def get_stats(prefix, doclist_path):
         for item in page['Contents']:
             #print(f"getting s3 object: {item['Key']}")
             response = s3_client.get_object(
-                Bucket=BUCKET,
+                Bucket=settings.S3_BUCKET,
                 Key=item['Key']
             )
 
@@ -195,7 +196,7 @@ def get_stats(prefix, doclist_path):
                 #print(f"{doc_count} {doc['path']}")
 
                 # query db for each record as a workaround while ES API endpoint is broken
-                if os.environ.get('NUXEO_API_ES_ENDPOINT_BROKEN', False):
+                if settings.NUXEO_API_ES_ENDPOINT_BROKEN:
                     uid = doc['uid']
                     doc_md = get_metadata_from_db(uid)
                 else:
@@ -341,15 +342,13 @@ def write_stats(stats, worksheet, rownum, rowname):
 
 def get_metadata_from_db(uid):
     # GET 'https://nuxeo.cdlib.org/nuxeo/site/api/v1/id/32f09ee0-dcc0-4746-90c4-ba4c710447cd' -H 'X-NXproperties: *' -H 'X-NXRepository: default' -H 'content-type: application/json' -u Administrator -p
-    api_base = os.environ.get('NUXEO_API_BASE', 'https://nuxeo.cdlib.org/nuxeo/')
-    api_path = os.environ.get('NUXEO_API_PATH', 'site/api/v1')
-    url = u'/'.join([api_base, api_path, "id", uid])
+    url = u'/'.join([settings.NUXEO_API, "id", uid])
     nuxeo_request_headers = {
                 "Accept": "application/json",
                 "Content-Type": "application/json",
                 "X-NXDocumentProperties": "*",
                 "X-NXRepository": "default",
-                "X-Authentication-Token": os.environ.get('NUXEO_TOKEN')
+                "X-Authentication-Token": settings.NUXEO_TOKEN
                 }
     request = {'url': url, 'headers': nuxeo_request_headers}
     response = requests.get(**request)
@@ -361,11 +360,11 @@ def load_to_s3(report_prefix, campus, filename, filepath):
     s3_client = boto3.client('s3')
     s3_key = f"{report_prefix}/{campus}/{filename}"
 
-    print(f"Writing s3://{BUCKET}/{s3_key}")
+    print(f"Writing s3://{settings.S3_BUCKET}/{s3_key}")
     try:
         response = s3_client.upload_file(
             Filename=filepath,
-            Bucket=BUCKET,
+            Bucket=settings.S3_BUCKET,
             Key=s3_key
         )
     except Exception as e:
