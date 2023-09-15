@@ -22,12 +22,9 @@ def report(campus):
     # create the excel workbook
     #today = datetime.now(pytz.timezone('US/Pacific')).strftime('%Y%m%d-%H%M')
     today = datetime.now(pytz.timezone('US/Pacific')).strftime('%Y%m%d')
-    output_dir = os.path.join(os.getcwd(), "output")
-    if not os.path.exists(output_dir):
-        os.mkdir(output_dir)
-    outdir = f"{output_dir}/reports-{today}"
+    outdir = os.path.join(os.getcwd(), "output", "reports")
     if not os.path.exists(outdir):
-        os.mkdir(outdir)
+        os.makedirs(outdir)
     outfile = f"{campus}-extent-stats-{today}.xlsx"
     outpath = os.path.join(outdir, outfile)
     workbook = xlsxwriter.Workbook(outpath)
@@ -60,16 +57,8 @@ def report(campus):
     row += 1
 
     # create a file to contain a list of all docs for QA purposes
-    output_dir = os.path.join(os.getcwd(), 'output')
-    if not os.path.exists(output_dir):
-        os.mkdir(output_dir)
-
-    doclist_dir = os.path.join(output_dir, f"doclists-{today}")
-    if not os.path.exists(doclist_dir):
-        os.mkdir(doclist_dir)
-
     doclist_file = f"{campus}-doclist-{today}.txt"
-    doclist_path = os.path.join(doclist_dir, doclist_file)
+    doclist_path = os.path.join(outdir, doclist_file)
     if os.path.exists(doclist_path):
         os.remove(doclist_path)
 
