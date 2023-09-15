@@ -15,9 +15,7 @@ class Fetcher(object):
     def __init__(self, params):
         self.campus = params.get('campus')
         self.path = params.get('path')
-        self.uid = params.get('uid', None)
-        if self.uid is None:
-            self.uid = self.get_nuxeo_uid_for_path(self.path)
+        self.uid = params.get('uid')
         self.current_page_index = params.get('current_page_index', 0)
         self.write_page = params.get('write_page', 0)
         #self.md_prefix = "metadata"
@@ -68,18 +66,6 @@ class Fetcher(object):
             print("No more pages to fetch")
 
         return request
-
-    def get_nuxeo_uid_for_path(self, path):
-        ''' get nuxeo uid for doc at given path '''
-        escaped_path = urllib.parse.quote(path, safe=' /')
-        url = u'/'.join([settings.NUXEO_API, "path", escaped_path.strip('/')])
-        headers = settings.NUXEO_REQUEST_HEADERS
-        request = {'url': url, 'headers': headers}
-        response = requests.get(**request)
-        response.raise_for_status()
-        json_response = response.json()
-
-        return json_response['uid']
 
     def get_records(self, http_resp):
         response = http_resp.json()
