@@ -1,5 +1,6 @@
 import sys, os
 import argparse
+from datetime import datetime
 
 import boto3
 
@@ -14,6 +15,7 @@ def main(params):
     elif params.all:
         campuses = settings.CAMPUSES
 
+    version = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
     for campus in campuses:
         print("**********************")
         print(f"******   {campus}   ******")
@@ -25,7 +27,8 @@ def main(params):
                 next_page = {
                     "campus": campus,
                     "path": folder['path'],
-                    "uid": folder['uid']
+                    "uid": folder['uid'],
+                    "version": version
                 }
 
                 while next_page:
@@ -33,7 +36,7 @@ def main(params):
                     fetcher.fetch_page()
                     next_page = fetcher.next_page()
 
-        extentreport.report(campus)
+        extentreport.report(campus, version)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="create nuxeo extent stats report(s)")

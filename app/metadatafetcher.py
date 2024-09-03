@@ -16,6 +16,7 @@ class Fetcher(object):
         self.campus = params.get('campus')
         self.path = params.get('path')
         self.uid = params.get('uid')
+        self.version = params.get('version')
         self.current_page_index = params.get('current_page_index', 0)
         self.write_page = params.get('write_page', 0)
         #self.md_prefix = "metadata"
@@ -95,8 +96,8 @@ class Fetcher(object):
         return
 
     def fetchtolocal(self, records):
-        folder_path = self.path.removeprefix(f'/asset-library/')
-        path = f"{os.getcwd()}/output/metadata/{folder_path}"
+        folder_path = self.path.removeprefix(f'/asset-library/{self.campus}')
+        path = f"{os.getcwd()}/output/{self.campus}/metadata/{self.version}{folder_path}"
         
         if not os.path.exists(path):
             os.makedirs(path)

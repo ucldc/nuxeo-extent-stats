@@ -11,7 +11,7 @@ import settings
 
 MD5S = []
 
-def report(campus):
+def report(campus, version):
     '''
     for a given campus:
         - get metadata files for campus from S3
@@ -20,12 +20,10 @@ def report(campus):
     '''
 
     # create the excel workbook
-    #today = datetime.now(pytz.timezone('US/Pacific')).strftime('%Y%m%d-%H%M')
-    today = datetime.now(pytz.timezone('US/Pacific')).strftime('%Y%m%d')
-    outdir = os.path.join(os.getcwd(), "output", "reports")
+    outdir = os.path.join(os.getcwd(), "output", campus, "reports", version)
     if not os.path.exists(outdir):
         os.makedirs(outdir)
-    outfile = f"{campus}-extent-stats-{today}.xlsx"
+    outfile = f"{campus}-extent-stats-{version}.xlsx"
     outpath = os.path.join(outdir, outfile)
     workbook = xlsxwriter.Workbook(outpath)
     bold_format = workbook.add_format({'bold': True})
@@ -57,7 +55,7 @@ def report(campus):
     row += 1
 
     # create a file to contain a list of all docs for QA purposes
-    doclist_file = f"{campus}-doclist-{today}.txt"
+    doclist_file = f"{campus}-doclist-{version}.txt"
     doclist_path = os.path.join(outdir, doclist_file)
     if os.path.exists(doclist_path):
         os.remove(doclist_path)
@@ -76,11 +74,11 @@ def report(campus):
         "total_size": 0
     }
 
-    prefixes = get_child_prefixes(f"metadata/{campus}")
+    prefixes = get_child_prefixes(f"{campus}/metadata/{version}")
 
     for prefix in prefixes:
         print(f"Aggregating stats for {prefix}")
-        stats = get_stats(prefix, doclist_path)
+        stats = get_stats(campus, version, prefix)
 
         rowname = prefix.split('/')[-1]
         write_stats(stats, summary_worksheet, row, rowname)
@@ -116,32 +114,39 @@ def report(campus):
     workbook.close()
 
     # load files to S3
-    report_prefix = "reports"
-    load_to_s3(report_prefix, campus, outfile, outpath)
-    load_to_s3(report_prefix, campus, doclist_file, doclist_path)
+    if not settings.DEBUG:
+        report_prefix = "reports"
+        load_to_s3(report_prefix, campus, outfile, outpath)
+        load_to_s3(report_prefix, campus, doclist_file, doclist_path)
 
     # delete local files?
 
 def get_child_prefixes(prefix):
-    s3_client = boto3.client('s3')
-    paginator = s3_client.get_paginator('list_objects_v2')
-    pages = paginator.paginate(
-        Bucket=settings.S3_BUCKET,
-        Prefix=prefix
-    )
+    if settings.DEBUG:
+        child_prefixes = []
+        path = f"{os.getcwd()}/output/{prefix}"
+        dir_list = os.listdir(path)
+        return dir_list
+    else:
+        s3_client = boto3.client('s3')
+        paginator = s3_client.get_paginator('list_objects_v2')
+        pages = paginator.paginate(
+            Bucket=settings.S3_BUCKET,
+            Prefix=prefix
+        )
 
-    child_prefixes = []
-    folder_prefix_parts_count = len(prefix.split('/'))
-    for page in pages:
-        for item in page['Contents']:
-            parts = item['Key'].split('/')
-            child_prefix = '/'.join(parts[0:folder_prefix_parts_count + 1])
-            if not child_prefix in child_prefixes:
-                child_prefixes.append(child_prefix)
+        child_prefixes = []
+        folder_prefix_parts_count = len(prefix.split('/'))
+        for page in pages:
+            for item in page['Contents']:
+                parts = item['Key'].split('/')
+                child_prefix = '/'.join(parts[0:folder_prefix_parts_count + 1])
+                if not child_prefix in child_prefixes:
+                    child_prefixes.append(child_prefix)
 
     return child_prefixes
 
-def get_stats(prefix, doclist_path):
+def get_stats(campus, version, prefix):
 
     doc_count = 0
 
@@ -159,53 +164,61 @@ def get_stats(prefix, doclist_path):
         "docs": []
     }
 
-    s3_client = boto3.client('s3')
-    paginator = s3_client.get_paginator('list_objects_v2')
-    pages = paginator.paginate(
-        Bucket=settings.S3_BUCKET,
-        Prefix=prefix
-    )
+    if settings.DEBUG:
+        metadata_dir = f"{os.getcwd()}/output/{campus}/metadata/{version}/{prefix}"
+        for file in os.listdir(metadata_dir):
+            with open(os.path.join(metadata_dir, file), "r") as f:
+                lines = f.readlines()
+    else:
+        s3_client = boto3.client('s3')
+        paginator = s3_client.get_paginator('list_objects_v2')
+        pages = paginator.paginate(
+            Bucket=settings.S3_BUCKET,
+            Prefix=prefix
+        )
 
-    for page in pages:
+        for page in pages:
 
-        for item in page['Contents']:
-            #print(f"getting s3 object: {item['Key']}")
-            response = s3_client.get_object(
-                Bucket=settings.S3_BUCKET,
-                Key=item['Key']
-            )
+            for item in page['Contents']:
+                #print(f"getting s3 object: {item['Key']}")
+                response = s3_client.get_object(
+                    Bucket=settings.S3_BUCKET,
+                    Key=item['Key']
+                )
 
-            for line in response['Body'].iter_lines():
-                doc = json.loads(line)
+                lines = response['Body'].iter_lines()
 
-                # Total Items (including components of complex objects; some may not have associated files)
-                doc_count += 1
+    for line in lines:
+        doc = json.loads(line)
 
-                #print("\n********************************")
-                #print(f"{doc_count} {doc['path']}")
+        # Total Items (including components of complex objects; some may not have associated files)
+        doc_count += 1
 
-                # query db for each record as a workaround while ES API endpoint is broken
-                if settings.NUXEO_API_ES_ENDPOINT_BROKEN:
-                    uid = doc['uid']
-                    doc_md = get_metadata_from_db(uid)
-                else:
-                    doc_md = doc
+        #print("\n********************************")
+        #print(f"{doc_count} {doc['path']}")
 
-                doc_extent = get_extent(doc_md)
+        # query db for each record as a workaround while ES API endpoint is broken
+        if settings.NUXEO_API_ES_ENDPOINT_BROKEN:
+            uid = doc['uid']
+            doc_md = get_metadata_from_db(uid)
+        else:
+            doc_md = doc
 
-                stats['main_count'] += doc_extent['main_count']
-                stats['main_size'] += doc_extent['main_size']
-                stats['filetab_count'] += doc_extent['filetab_count']
-                stats['filetab_size'] += doc_extent['filetab_size']
-                stats['aux_count'] += doc_extent['aux_count']
-                stats['aux_size'] += doc_extent['aux_size']
-                stats['deriv_count'] += doc_extent['deriv_count']
-                stats['deriv_size'] += doc_extent['deriv_size']
-                stats['total_count'] += doc_extent['total_count']
-                stats['total_size'] += doc_extent['total_size']
-                stats['docs'].append(f"{doc_md['uid']}, {doc_md['path']}\n")
+        doc_extent = get_extent(doc_md)
 
-    stats['doc_count'] = doc_count
+        stats['main_count'] += doc_extent['main_count']
+        stats['main_size'] += doc_extent['main_size']
+        stats['filetab_count'] += doc_extent['filetab_count']
+        stats['filetab_size'] += doc_extent['filetab_size']
+        stats['aux_count'] += doc_extent['aux_count']
+        stats['aux_size'] += doc_extent['aux_size']
+        stats['deriv_count'] += doc_extent['deriv_count']
+        stats['deriv_size'] += doc_extent['deriv_size']
+        stats['total_count'] += doc_extent['total_count']
+        stats['total_size'] += doc_extent['total_size']
+        stats['docs'].append(f"{doc_md['uid']}, {doc_md['path']}\n")
+
+        stats['doc_count'] = doc_count
 
     return stats
 
