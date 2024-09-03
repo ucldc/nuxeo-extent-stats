@@ -34,7 +34,8 @@ If you do not provide an `=` then docker will read the value from your local env
 ```
 CAMPUSES=["UCB","UCD","UCI","UCLA","UCM","UCOP","UCR","UCSC","UCSD","UCSF"]
 
-DEBUG=False
+# set to True if you want to write files to local disk only
+LOCAL=False
 
 # set to True as a very hacky workaround for when Nuxeo API was broken for ElasticSearch endpoint
 NUXEO_API_ES_ENDPOINT_BROKEN=False

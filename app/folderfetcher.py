@@ -14,7 +14,7 @@ def fetch_folder_list(path, outdir, depth=-1):
 
     folders = fetch_folders_recursive(uid, path, depth)
 
-    if settings.DEBUG:
+    if settings.LOCAL:
         fetchtolocal(outdir, folders)
     else:
         fetchtos3(outdir, folders)

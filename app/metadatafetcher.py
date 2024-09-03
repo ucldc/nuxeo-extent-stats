@@ -6,7 +6,7 @@ import math
 
 import settings
 
-if settings.DEBUG is False:
+if settings.LOCAL is False:
     import boto3
 
 PAGE_SIZE = 100
@@ -28,7 +28,7 @@ class Fetcher(object):
         records = self.get_records(response)
 
         if len(records) > 0:
-            if settings.DEBUG:
+            if settings.LOCAL:
                 self.fetchtolocal(records)
             else:
                 self.fetchtos3(records)

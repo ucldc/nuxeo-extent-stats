@@ -114,7 +114,7 @@ def report(campus, version):
     workbook.close()
 
     # load files to S3
-    if not settings.DEBUG:
+    if not settings.LOCAL:
         report_prefix = "reports"
         load_to_s3(report_prefix, campus, outfile, outpath)
         load_to_s3(report_prefix, campus, doclist_file, doclist_path)
@@ -122,7 +122,7 @@ def report(campus, version):
     # delete local files?
 
 def get_child_prefixes(prefix):
-    if settings.DEBUG:
+    if settings.LOCAL:
         child_prefixes = []
         path = f"{os.getcwd()}/output/{prefix}"
         dir_list = os.listdir(path)
@@ -164,7 +164,7 @@ def get_stats(campus, version, prefix):
         "docs": []
     }
 
-    if settings.DEBUG:
+    if settings.LOCAL:
         metadata_dir = f"{os.getcwd()}/output/{campus}/metadata/{version}/{prefix}"
         for file in os.listdir(metadata_dir):
             with open(os.path.join(metadata_dir, file), "r") as f:
