@@ -190,61 +190,59 @@ def get_stats(campus, version, prefix):
         metadata_dir = os.path.join(data_loc.path, campus, version, prefix)
         for file in os.listdir(metadata_dir):
             with open(os.path.join(metadata_dir, file), "r") as f:
-                lines = f.readlines()
-    else:
+                for line in f.readlines():
+                    stats = add_doc_to_stats(stats, line)
+                    doc_count += 1
+    elif data_loc.scheme == 's3':
         s3_client = boto3.client('s3')
         paginator = s3_client.get_paginator('list_objects_v2')
         pages = paginator.paginate(
             Bucket=data_loc.netloc,
             Prefix=prefix
         )
-
         for page in pages:
-
             for item in page['Contents']:
                 #print(f"getting s3 object: {item['Key']}")
                 response = s3_client.get_object(
                     Bucket=data_loc.netloc,
                     Key=item['Key']
                 )
+                for line in response['Body'].iter_lines():
+                    stats = add_doc_to_stats(stats, line)
+                    doc_count += 1
+    else:
+        raise Exception(f"Unknown data scheme: {data_loc.scheme}")
 
-                lines = response['Body'].iter_lines()
+    # Total Items (including components of complex objects; some may not have associated files)
+    stats['doc_count'] = doc_count
 
-    for line in lines:
-        doc = json.loads(line)
+    return stats
 
-        # Total Items (including components of complex objects; some may not have associated files)
-        doc_count += 1
+def add_doc_to_stats(stats, doc):
 
-        #print("\n********************************")
-        #print(f"{doc_count} {doc['path']}")
+    doc = json.loads(doc)
+    doc_extent = get_extent(doc)
 
-        # query db for each record as a workaround while ES API endpoint is broken
-        if settings.NUXEO_API_ES_ENDPOINT_BROKEN:
-            uid = doc['uid']
-            doc_md = get_metadata_from_db(uid)
-        else:
-            doc_md = doc
-
-        doc_extent = get_extent(doc_md)
-
-        stats['main_count'] += doc_extent['main_count']
-        stats['main_size'] += doc_extent['main_size']
-        stats['filetab_count'] += doc_extent['filetab_count']
-        stats['filetab_size'] += doc_extent['filetab_size']
-        stats['aux_count'] += doc_extent['aux_count']
-        stats['aux_size'] += doc_extent['aux_size']
-        stats['deriv_count'] += doc_extent['deriv_count']
-        stats['deriv_size'] += doc_extent['deriv_size']
-        stats['total_count'] += doc_extent['total_count']
-        stats['total_size'] += doc_extent['total_size']
-        stats['docs'].append(f"{doc_md['uid']}, {doc_md['path']}\n")
-
-        stats['doc_count'] = doc_count
+    stats['docs'].append(f"{doc['uid']}, {doc['path']}\n")
+    stats['main_count'] += doc_extent['main_count']
+    stats['main_size'] += doc_extent['main_size']
+    stats['filetab_count'] += doc_extent['filetab_count']
+    stats['filetab_size'] += doc_extent['filetab_size']
+    stats['aux_count'] += doc_extent['aux_count']
+    stats['aux_size'] += doc_extent['aux_size']
+    stats['deriv_count'] += doc_extent['deriv_count']
+    stats['deriv_size'] += doc_extent['deriv_size']
+    stats['total_count'] += doc_extent['total_count']
+    stats['total_size'] += doc_extent['total_size']
 
     return stats
 
 def get_extent(doc):
+    # query db for each record as a workaround while ES API endpoint is broken
+    if settings.NUXEO_API_ES_ENDPOINT_BROKEN:
+        uid = doc['uid']
+        doc = get_metadata_from_db(uid)
+
     extent = {
         "main_count": 0,
         "main_size": 0,
