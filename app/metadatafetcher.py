@@ -1,13 +1,12 @@
 import os
 import requests
-import urllib.parse
+from urllib.parse import urlparse
 import json
 import math
 
 import settings
 
-if settings.LOCAL is False:
-    import boto3
+import boto3
 
 PAGE_SIZE = 100
 
@@ -27,11 +26,16 @@ class Fetcher(object):
         response.raise_for_status()
         records = self.get_records(response)
 
+
         if len(records) > 0:
-            if settings.LOCAL:
-                self.fetchtolocal(records)
+            data_loc = urlparse(settings.METADATA)
+            if data_loc.scheme == 'file':
+                self.fetchtolocal(records, data_loc.path)
+            elif data_loc.scheme == 's3':
+                self.fetchtos3(records, data_loc.netloc, data_loc.path)
             else:
-                self.fetchtos3(records)
+                raise Exception(f"Unknown data scheme: {data_loc.scheme}")
+
 
         self.increment(response)
 
@@ -95,9 +99,9 @@ class Fetcher(object):
 
         return
 
-    def fetchtolocal(self, records):
-        folder_path = self.path.removeprefix(f'/asset-library/{self.campus}')
-        path = f"{os.getcwd()}/output/{self.campus}/metadata/{self.version}{folder_path}"
+    def fetchtolocal(self, records, base_path):
+        folder_path = self.path.removeprefix(f'/asset-library/{self.campus}/')
+        path = os.path.join(base_path, self.campus, self.version, folder_path)
         
         if not os.path.exists(path):
             os.makedirs(path)
@@ -110,14 +114,15 @@ class Fetcher(object):
         f.write(jsonl)
         f.write("\n")
 
-    def fetchtos3(self, records):
+    def fetchtos3(self, records, bucket, base_path):
         s3_client = boto3.client('s3')
-        bucket = settings.S3_BUCKET
-        folder_path = self.path.removeprefix('/asset-library/')
-        s3_key = f"metadata/{folder_path}/{self.write_page}.jsonl"
+        folder_path = self.path.removeprefix(f'/asset-library/{self.campus}/')
+        s3_key = f"{base_path.lstrip('/')}/{self.campus}/{self.version}/{folder_path}/{self.write_page}.jsonl"
 
         jsonl = "\n".join([json.dumps(record) for record in records])
 
+        print(f"{bucket=}")
+        print(f"{s3_key=}")
         print(f"Writing s3://{bucket}/{s3_key}")
         try:
             # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.Client.put_object
@@ -137,6 +142,7 @@ class Fetcher(object):
             "campus": self.campus,
             "path": self.path,
             "uid": self.uid,
+            "version": self.version,
             "current_page_index": self.current_page_index,
             "write_page": self.write_page
         }
