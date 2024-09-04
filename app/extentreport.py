@@ -1,11 +1,11 @@
-import sys, os
+import os
 import boto3
 import json
 import xlsxwriter
-from datetime import datetime
-import pytz
 import humanize
 import requests
+from urllib.parse import urlparse
+import shutil
 
 import settings
 
@@ -20,11 +20,11 @@ def report(campus, version):
     '''
 
     # create the excel workbook
-    outdir = os.path.join(os.getcwd(), "output", campus, "reports", version)
-    if not os.path.exists(outdir):
-        os.makedirs(outdir)
+    tmp_dir = settings.TEMP
+    if not os.path.exists(tmp_dir):
+        os.makedirs(tmp_dir)
     outfile = f"{campus}-extent-stats-{version}.xlsx"
-    outpath = os.path.join(outdir, outfile)
+    outpath = os.path.join(tmp_dir, outfile)
     workbook = xlsxwriter.Workbook(outpath)
     bold_format = workbook.add_format({'bold': True})
     summary_worksheet = workbook.add_worksheet('Summary')
@@ -56,7 +56,7 @@ def report(campus, version):
 
     # create a file to contain a list of all docs for QA purposes
     doclist_file = f"{campus}-doclist-{version}.txt"
-    doclist_path = os.path.join(outdir, doclist_file)
+    doclist_path = os.path.join(tmp_dir, doclist_file)
     if os.path.exists(doclist_path):
         os.remove(doclist_path)
 
@@ -74,7 +74,7 @@ def report(campus, version):
         "total_size": 0
     }
 
-    prefixes = get_child_prefixes(f"{campus}/metadata/{version}")
+    prefixes = get_child_prefixes(campus, version)
 
     for prefix in prefixes:
         print(f"Aggregating stats for {prefix}")
@@ -114,24 +114,45 @@ def report(campus, version):
     workbook.close()
 
     # load files to S3
-    if not settings.LOCAL:
-        report_prefix = "reports"
-        load_to_s3(report_prefix, campus, outfile, outpath)
-        load_to_s3(report_prefix, campus, doclist_file, doclist_path)
+    data_loc = urlparse(settings.REPORTS)
+    if data_loc.scheme == 's3':
+        bucket = data_loc.netloc
+        key = f"{data_loc.path}/{campus}/{version}/{outfile}".lstrip('/')
+        load_to_s3(bucket, key, outpath)
+        key = f"{data_loc.path}/{campus}/{version}/{doclist_file}".lstrip('/')
+        load_to_s3(bucket, key, doclist_path)
+    elif data_loc.scheme == 'file':
+        dest_dir = os.path.join(data_loc.path, campus, version)
+        if not os.path.exists(dest_dir):
+            os.makedirs(dest_dir)
+        destination = os.path.join(dest_dir, outfile)
+        print(f"Writing file://{destination}")
+        shutil.copyfile(outpath, destination)
 
-    # delete local files?
+        destination = os.path.join(dest_dir, doclist_file)
+        print(f"Writing file://{destination}")
+        shutil.copyfile(doclist_path, destination)
 
-def get_child_prefixes(prefix):
-    if settings.LOCAL:
+    # delete tmp files
+    os.remove(outpath)
+    os.remove(doclist_path)
+
+def get_child_prefixes(campus, version):
+    data_loc = urlparse(settings.METADATA)
+    if data_loc.scheme == 'file':
         child_prefixes = []
-        path = f"{os.getcwd()}/output/{prefix}"
+        path = os.path.join(data_loc.path, campus, version)
         dir_list = os.listdir(path)
         return dir_list
     else:
         s3_client = boto3.client('s3')
         paginator = s3_client.get_paginator('list_objects_v2')
+        bucket = data_loc.netloc
+        prefix = data_loc.path
+        prefix = prefix.lstrip('/')
+        prefix = f"{prefix}/{campus}/{version}"
         pages = paginator.paginate(
-            Bucket=settings.S3_BUCKET,
+            Bucket=bucket,
             Prefix=prefix
         )
 
@@ -164,8 +185,9 @@ def get_stats(campus, version, prefix):
         "docs": []
     }
 
-    if settings.LOCAL:
-        metadata_dir = f"{os.getcwd()}/output/{campus}/metadata/{version}/{prefix}"
+    data_loc = urlparse(settings.METADATA)
+    if data_loc.scheme == 'file':
+        metadata_dir = os.path.join(data_loc.path, campus, version, prefix)
         for file in os.listdir(metadata_dir):
             with open(os.path.join(metadata_dir, file), "r") as f:
                 lines = f.readlines()
@@ -173,7 +195,7 @@ def get_stats(campus, version, prefix):
         s3_client = boto3.client('s3')
         paginator = s3_client.get_paginator('list_objects_v2')
         pages = paginator.paginate(
-            Bucket=settings.S3_BUCKET,
+            Bucket=data_loc.netloc,
             Prefix=prefix
         )
 
@@ -182,7 +204,7 @@ def get_stats(campus, version, prefix):
             for item in page['Contents']:
                 #print(f"getting s3 object: {item['Key']}")
                 response = s3_client.get_object(
-                    Bucket=settings.S3_BUCKET,
+                    Bucket=data_loc.netloc,
                     Key=item['Key']
                 )
 
@@ -358,16 +380,15 @@ def get_metadata_from_db(uid):
     json_resp = response.json()
     return json_resp
 
-def load_to_s3(report_prefix, campus, filename, filepath):
+def load_to_s3(bucket, key, filepath):
     s3_client = boto3.client('s3')
-    s3_key = f"{report_prefix}/{campus}/{filename}"
 
-    print(f"Writing s3://{settings.S3_BUCKET}/{s3_key}")
+    print(f"Writing s3://{bucket}/{key}")
     try:
         response = s3_client.upload_file(
             Filename=filepath,
-            Bucket=settings.S3_BUCKET,
-            Key=s3_key
+            Bucket=bucket,
+            Key=key
         )
     except Exception as e:
             print(f"ERROR loading to S3: {e}")
