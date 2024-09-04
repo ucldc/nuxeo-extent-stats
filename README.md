@@ -34,15 +34,16 @@ If you do not provide an `=` then docker will read the value from your local env
 ```
 CAMPUSES=["UCB","UCD","UCI","UCLA","UCM","UCOP","UCR","UCSC","UCSD","UCSF"]
 
-# set to True if you want to write files to local disk only
-LOCAL=False
+NUXEO_EXTENT_STATS_METADATA=s3://nuxeo-extent-stats/metadata
+NUXEO_EXTENT_STATS_REPORTS=s3://nuxeo-extent-stats/reports
+
+NUXEO_EXTENT_STATS_LOCAL_TEMPDIR=/Users/bhui/dev/nuxeo-extent-stats/tmp
 
 # set to True as a very hacky workaround for when Nuxeo API was broken for ElasticSearch endpoint
 NUXEO_API_ES_ENDPOINT_BROKEN=False
 
 NUXEO_TOKEN=xxxxxxx-xxxx-xxxx-xxxx-xxxxxxx
 NUXEO_API=https://nuxeo.cdlib.org/nuxeo/site/api/v1
-S3_BUCKET=nuxeo-extent-stats-2023
 
 AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY
