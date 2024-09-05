@@ -1,12 +1,10 @@
-FROM python:3.9
+FROM python:3.10
 
 WORKDIR /nuxeo-extent-stats
 
-COPY . .
+COPY --chmod=744 extentstats.py .
+COPY requirements.txt .
 
 RUN pip3 install -r requirements.txt
 
-#ENTRYPOINT ["/usr/local/bin/python", "app/create_reports.py"]
-
-# default argument to ENTRYPOINT
-#CMD ["--all"]
+ENTRYPOINT ["python", "extentstats.py"]

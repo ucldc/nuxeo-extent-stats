@@ -1,0 +1,12 @@
+# compose file for dev purposes
+services:
+  nuxeoextent:
+    image: nuxeoextent/app
+    pull_policy: never
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+      tags:
+        - nuxeoextent/app
+    env_file: env.docker
+    command: ["--campus", "UCSD"]

@@ -11,3 +11,4 @@ README.md
 .DS_Store
 .python-version
 tmp
+env.docker
