@@ -365,14 +365,7 @@ def write_stats(stats, worksheet, rownum, rowname):
 def get_metadata_from_db(uid):
     # GET 'https://nuxeo.cdlib.org/nuxeo/site/api/v1/id/32f09ee0-dcc0-4746-90c4-ba4c710447cd' -H 'X-NXproperties: *' -H 'X-NXRepository: default' -H 'content-type: application/json' -u Administrator -p
     url = u'/'.join([settings.NUXEO_API, "id", uid])
-    nuxeo_request_headers = {
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "X-NXDocumentProperties": "*",
-                "X-NXRepository": "default",
-                "X-Authentication-Token": settings.NUXEO_TOKEN
-                }
-    request = {'url': url, 'headers': nuxeo_request_headers}
+    request = {'url': url, 'headers': settings.NUXEO_REQUEST_HEADERS}
     response = requests.get(**request)
     response.raise_for_status()
     json_resp = response.json()
