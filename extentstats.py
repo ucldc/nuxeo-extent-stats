@@ -629,8 +629,9 @@ def main(params):
         else:
             # fetch metadata from scratch from nuxeo
             version = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
-            uid = get_nuxeo_uid_for_path(f"/asset-library/{campus}")
-            folders = get_campus_folders_from_nuxeo(uid, 1)
+            path = f"/asset-library/{campus}"
+            uid = get_nuxeo_uid_for_path(path)
+            folders = get_campus_folders_from_nuxeo(uid, campus, 1)
             for folder in folders:
                 next_page = {
                     "campus": campus,
