@@ -12,7 +12,22 @@ import requests
 from urllib.parse import quote, urlparse
 import xlsxwriter
 
-import settings
+CAMPUSES = os.environ.get('CAMPUSES')
+
+METADATA = os.environ.get('NUXEO_EXTENT_STATS_METADATA')
+REPORTS = os.environ.get('NUXEO_EXTENT_STATS_REPORTS')
+TEMP = os.environ.get('NUXEO_EXTENT_STATS_LOCAL_TEMPDIR')
+
+NUXEO_API_ES_ENDPOINT_BROKEN = os.environ.get('NUXEO_API_ES_ENDPOINT_BROKEN', False)
+NUXEO_TOKEN = os.environ.get('NUXEO_TOKEN')
+NUXEO_API = os.environ.get('NUXEO_API')
+NUXEO_REQUEST_HEADERS = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "X-NXDocumentProperties": "*",
+                "X-NXRepository": "default",
+                "X-Authentication-Token": NUXEO_TOKEN
+                }
 
 DataStorage = namedtuple(
     "DateStorage", "uri, store, bucket, path"
@@ -75,7 +90,7 @@ class Fetcher(object):
         records = self.get_records(response)
 
         if len(records) > 0:
-            data = parse_data_uri(settings.METADATA)
+            data = parse_data_uri(METADATA)
             if data.store == 'file':
                 folder_path = self.path.removeprefix(f'/asset-library/{self.campus}/')
                 dir = os.path.join(data.path, self.campus, self.version, folder_path)
@@ -100,9 +115,9 @@ class Fetcher(object):
               f"ecm:isVersion = 0 AND " \
               f"ecm:isTrashed = 0 ORDER BY ecm:name"
 
-            headers = settings.NUXEO_REQUEST_HEADERS
+            headers = NUXEO_REQUEST_HEADERS
 
-            url = u'/'.join([settings.NUXEO_API, "search/lang/NXQL/execute"])
+            url = u'/'.join([NUXEO_API, "search/lang/NXQL/execute"])
             params = {
                 'pageSize': f'{self.page_size}',
                 'currentPageIndex': self.current_page_index,
@@ -167,8 +182,8 @@ class Fetcher(object):
 
 def get_nuxeo_uid_for_path(path):
     escaped_path = quote(path, safe=' /')
-    url = u'/'.join([settings.NUXEO_API, "path", escaped_path.strip('/')])
-    headers = settings.NUXEO_REQUEST_HEADERS
+    url = u'/'.join([NUXEO_API, "path", escaped_path.strip('/')])
+    headers = NUXEO_REQUEST_HEADERS
     request = {'url': url, 'headers': headers}
     response = requests.get(**request)
     response.raise_for_status()
@@ -189,8 +204,8 @@ def get_campus_folders_from_nuxeo(start_uid, path, depth=-1):
             query = f"SELECT * FROM Organization " \
                     f"WHERE ecm:parentId = '{uid}' " \
                     f"AND ecm:isTrashed = 0"
-            url = u'/'.join([settings.NUXEO_API, "search/lang/NXQL/execute"])
-            headers = settings.NUXEO_REQUEST_HEADERS
+            url = u'/'.join([NUXEO_API, "search/lang/NXQL/execute"])
+            headers = NUXEO_REQUEST_HEADERS
             page_size = 1000
             params = {
                 'pageSize': page_size,
@@ -237,7 +252,7 @@ def get_campus_folders_from_storage(campus, version):
 
     Returns a list of strings
     '''
-    data = parse_data_uri(settings.METADATA)
+    data = parse_data_uri(METADATA)
 
     if data.store == 'file':
         path = os.path.join(data.path, campus, version)
@@ -277,7 +292,7 @@ def create_extent_report(campus, version):
     '''
 
     # create the excel excel_workbook
-    tmp_dir = settings.TEMP
+    tmp_dir = TEMP
     if not os.path.exists(tmp_dir):
         os.makedirs(tmp_dir)
     excel_file_name = f"{campus}-extent-stats-{version}.xlsx"
@@ -370,7 +385,7 @@ def create_extent_report(campus, version):
     excel_workbook.close()
 
     # write files to storage
-    data = parse_data_uri(settings.REPORTS)
+    data = parse_data_uri(REPORTS)
     if data.store == 's3':
         key = f"{data.path}/{campus}/{version}/{excel_file_name}".lstrip('/')
         load_file_to_s3(data.bucket, key, excel_file_path)
@@ -413,7 +428,7 @@ def get_stats(campus, version, folder):
         "docs": []
     }
 
-    data = parse_data_uri(settings.METADATA)
+    data = parse_data_uri(METADATA)
     if data.store == 'file':
         metadata_dir = os.path.join(data.path, campus, version, folder)
         for file in os.listdir(metadata_dir):
@@ -467,7 +482,7 @@ def add_doc_to_stats(stats, doc):
 
 def get_extent(doc):
     # query db for each record as a workaround while ES API endpoint is broken
-    if settings.NUXEO_API_ES_ENDPOINT_BROKEN:
+    if NUXEO_API_ES_ENDPOINT_BROKEN:
         uid = doc['uid']
         doc = get_metadata_from_db(uid)
 
@@ -569,8 +584,8 @@ def get_extent(doc):
     return extent
 
 def get_metadata_from_db(uid):
-    url = u'/'.join([settings.NUXEO_API, "id", uid])
-    request = {'url': url, 'headers': settings.NUXEO_REQUEST_HEADERS}
+    url = u'/'.join([NUXEO_API, "id", uid])
+    request = {'url': url, 'headers': NUXEO_REQUEST_HEADERS}
     response = requests.get(**request)
     response.raise_for_status()
     json_resp = response.json()
@@ -602,7 +617,7 @@ def main(params):
     if params.campus:
         campuses = [params.campus]
     elif params.all:
-        campuses = settings.CAMPUSES
+        campuses = CAMPUSES
 
     for campus in campuses:
         print("**********************")
