@@ -7,3 +7,7 @@ output
 */output
 OLD
 README.md
+.venv
+.DS_Store
+.python-version
+tmp

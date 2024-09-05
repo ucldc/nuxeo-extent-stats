@@ -5,3 +5,5 @@ output/
 .venv/
 .DS_Store
 .python-version
+OLD/
+tmp/
