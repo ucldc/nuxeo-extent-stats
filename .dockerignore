@@ -11,5 +11,5 @@ README.md
 .DS_Store
 .python-version
 tmp
-env.docker
 sceptre
+run-extent-stats-task.py
