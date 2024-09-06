@@ -1,0 +1,8 @@
+template:
+  path: nuxeo-extent-stats.yaml
+  type: file
+parameters:
+  SourceVersion: 2024-updates
+  EcrRepo: nuxeo-extent-stats
+  S3Bucket: nuxeo-extent-stats
+  EcsClusterName: nuxeo
