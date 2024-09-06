@@ -6,3 +6,10 @@ parameters:
   EcrRepo: nuxeo-extent-stats
   S3Bucket: nuxeo-extent-stats
   EcsClusterName: nuxeo
+  Campuses: ["UCB","UCD","UCI","UCLA","UCM","UCOP","UCR","UCSC","UCSD","UCSF"]
+  MetadataUri: "s3://nuxeo-extent-stats/metadata"
+  ReportsUri: "s3://nuxeo-extent-stats/reports"
+  TempDir: "/Users/bhui/dev/nuxeo-extent-stats/tmp"
+  EsEndPointBroken: "False"
+  NuxeoToken: !environment_variable NUXEO_TOKEN
+  NuxeoApiEndpoint: "https://nuxeo.cdlib.org/nuxeo/site/api/v1"

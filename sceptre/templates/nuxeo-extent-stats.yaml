@@ -13,6 +13,20 @@ Parameters:
   EcsClusterName:
     Description: Name of the ECS cluster to create
     Type: String
+  Campuses:
+    Type: String
+  MetadataUri:
+    Type: String
+  ReportsUri:
+    Type: String
+  TempDir:
+    Type: String
+  EsEndPointBroken:
+    Type: String
+  NuxeoToken:
+    Type: String
+  NuxeoApiEndpoint:
+    Type: String
 Resources:
   NuxeoExtentStatsCodeBuildRole:
     Type: AWS::IAM::Role
@@ -244,5 +258,20 @@ Resources:
               awslogs-region: us-west-2
               awslogs-stream-prefix: ecs
           Essential: true
+          Environment:
+            - Name: CAMPUSES
+              Value: !Ref Campuses
+            - Name: NUXEO_EXTENT_STATS_METADATA
+              Value: !Ref MetadataUri
+            - Name: NUXEO_EXTENT_STATS_REPORTS
+              Value: !Ref ReportsUri
+            - Name: NUXEO_EXTENT_STATS_LOCAL_TEMPDIR
+              Value: !Ref TempDir
+            - Name: NUXEO_API_ES_ENDPOINT_BROKEN
+              Value: !Ref EsEndPointBroken
+            - Name: NUXEO_TOKEN
+              Value: !Ref NuxeoToken
+            - Name: NUXEO_API
+              Value: !Ref NuxeoApiEndpoint
           LinuxParameters:
             InitProcessEnabled: true
