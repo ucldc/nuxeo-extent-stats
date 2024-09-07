@@ -7,3 +7,9 @@ output
 */output
 OLD
 README.md
+.venv
+.DS_Store
+.python-version
+tmp
+sceptre
+run-extent-stats-task.py

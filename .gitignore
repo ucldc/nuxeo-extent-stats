@@ -2,3 +2,9 @@ env
 __pycache__/
 env.local
 output/
+.venv/
+.DS_Store
+.python-version
+OLD/
+tmp/
+env.docker.dev

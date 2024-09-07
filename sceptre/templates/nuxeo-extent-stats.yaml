@@ -1,0 +1,277 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Nuxeo extent stats CodeBuild project and ECS task
+Parameters:
+  SourceVersion:
+    Description: The git branch name on which to base the docker builds
+    Type: String
+  EcrRepo:
+    Description: ECR repo name
+    Type: String
+  S3Bucket:
+    Description: S3 bucket in which metadata and reports will be stored
+    Type: String
+  EcsClusterName:
+    Description: Name of the ECS cluster to create
+    Type: String
+  Campuses:
+    Type: String
+  MetadataUri:
+    Type: String
+  ReportsUri:
+    Type: String
+  TempDir:
+    Type: String
+  EsEndPointBroken:
+    Type: String
+  NuxeoToken:
+    Type: String
+  NuxeoApiEndpoint:
+    Type: String
+Resources:
+  NuxeoExtentStatsCodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: "nuxeo-extent-stats-codebuild-role"
+      Path: "/service-role/"
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ codebuild.amazonaws.com ]
+            Action: [ "sts:AssumeRole" ]
+  #################################
+  ## CodeBuild Role & Policy
+  #################################
+  NuxeoExtentStatsCodeBuildPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: nuxeo-extent-stats-codebuild-policy
+      Roles: [ !Ref NuxeoExtentStatsCodeBuildRole ]
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: CodeBuildLogsAccess
+            Effect: Allow
+            Action: 
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource:
+              - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:nuxeo-extent-stats
+              - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:nuxeo-extent-stats:*
+          - Sid: ECRAccess
+            Effect: Allow
+            Action:
+              - ecr-public:GetAuthorizationToken
+              - ecr:BatchCheckLayerAvailability
+              - ecr:GetAuthorizationToken
+              - ecr:InitiateLayerUpload
+              - ecr:UploadLayerPart
+              - ecr:CompleteLayerUpload
+              - ecr:PutImage
+              - sts:GetServiceBearerToken
+            Resource: 
+              - "*"
+  #################################
+  ## CodeBuild Project
+  #################################
+  NuxeoExtentStatsCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: nuxeo-extent-stats
+      Description: Build nuxeo extent stats docker image and push to ECR
+      ServiceRole: !GetAtt NuxeoExtentStatsCodeBuildRole.Arn
+      SourceVersion: !Ref SourceVersion
+      Source:
+        Type: GITHUB
+        Location: https://github.com/ucldc/nuxeo-extent-stats.git
+        # Auth:
+        #   Type: OAUTH
+        GitCloneDepth: 1
+        # For >- and newline handling docs see: https://yaml-multiline.info/
+        BuildSpec: !Sub >-
+          version: 0.2
+
+          phases:
+            build:
+              commands:
+                # login to ECR public so we can pull python image
+                - aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+                - docker build -f Dockerfile -t ${EcrRepo} .
+                # login to ECR private so we can push new image
+                - aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin ${AWS::AccountId}.dkr.ecr.us-west-2.amazonaws.com
+                - docker tag ${EcrRepo}:latest ${AWS::AccountId}.dkr.ecr.us-west-2.amazonaws.com/${EcrRepo}:latest
+                - docker push ${AWS::AccountId}.dkr.ecr.us-west-2.amazonaws.com/${EcrRepo}:latest
+      Environment:
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:5.0
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        PrivilegedMode: true
+      Artifacts:
+        Type: NO_ARTIFACTS
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: nuxeo-extent-stats
+          Status: ENABLED
+          StreamName: build
+  #################################
+  ## ECS Execution Role & Policy
+  #################################
+  NuxeoExtentStatsECSExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: nuxeo-extent-stats-ecs-execution-role
+      Path: "/service-role/"
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ ecs-tasks.amazonaws.com ]
+            Action: [ "sts:AssumeRole" ]
+  NuxeoExtentStatsECSExecutionPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: nuxeo-extent-stats-ecs-execution-policy
+      Path: "/"
+      Roles: [ !Ref NuxeoExtentStatsECSExecutionRole ]
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: EcrAccess
+            Effect: Allow
+            Action:
+              - ecr:GetAuthorizationToken
+              - ecr:BatchCheckLayerAvailability
+              - ecr:GetDownloadUrlForLayer
+              - ecr:BatchGetImage
+            Resource: "*"
+          - Sid: LoggingAccess
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: "*"
+  ###################################
+  ## ECS Task Role
+  ###################################
+  NuxeoExtentStatsTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: nuxeo-extent-stats-task-role
+      Path: "/service-role/"
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ ecs-tasks.amazonaws.com ]
+            Action: [ "sts:AssumeRole" ]
+            Condition:
+              ArnLike:
+                aws:SourceArn:
+                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:*"
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+  ###############################################
+  ## ECS Task Policy
+  ###############################################
+  NuxeoExtentStatsTaskPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: nuxeo-extent-stats-task-policy
+      Path: "/"
+      Roles:
+        - !Ref NuxeoExtentStatsTaskRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: LogsAccess
+            Effect: Allow
+            Action: 
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: "*"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:GetObject
+              - s3:PutObject
+              - s3:GetObjectAcl
+              - s3:GetObjectVersion
+            Resource: 
+              - !Sub arn:aws:s3:::${S3Bucket}
+              - !Sub arn:aws:s3:::${S3Bucket}/*
+  #####################
+  # ECS Cluster
+  # NOTE: if we move Nuxeo into Fargate then we should create this cluster as part of a different template?
+  #####################
+  NuxeoECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Ref EcsClusterName
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      ClusterSettings:
+        - Name: containerInsights
+          Value: disabled
+      Configuration:
+        ExecuteCommandConfiguration:
+          Logging: DEFAULT
+      Tags:
+        - Key: Program
+          Value: pad
+        - Key: Service
+          Value: nuxeo-extent-stats
+  ###############################
+  # ECS Task Definition
+  ###############################
+  NuxeoExtentStatsTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: nuxeo-extent-stats-task-definition
+      RequiresCompatibilities: 
+        - FARGATE
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      Cpu: 2 vCPU
+      Memory: 4096
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !GetAtt NuxeoExtentStatsECSExecutionRole.Arn
+      TaskRoleArn: !GetAtt NuxeoExtentStatsTaskRole.Arn
+      ContainerDefinitions:
+        - Name: nuxeo-extent-stats
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.us-west-2.amazonaws.com/${EcrRepo}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-create-group: true
+              awslogs-group: nuxeo-extent-stats
+              awslogs-region: us-west-2
+              awslogs-stream-prefix: ecs
+          Essential: true
+          Environment:
+            - Name: CAMPUSES
+              Value: !Ref Campuses
+            - Name: NUXEO_EXTENT_STATS_METADATA
+              Value: !Ref MetadataUri
+            - Name: NUXEO_EXTENT_STATS_REPORTS
+              Value: !Ref ReportsUri
+            - Name: NUXEO_EXTENT_STATS_LOCAL_TEMPDIR
+              Value: !Ref TempDir
+            - Name: NUXEO_API_ES_ENDPOINT_BROKEN
+              Value: !Ref EsEndPointBroken
+            - Name: NUXEO_TOKEN
+              Value: !Ref NuxeoToken
+            - Name: NUXEO_API
+              Value: !Ref NuxeoApiEndpoint
+          LinuxParameters:
+            InitProcessEnabled: true

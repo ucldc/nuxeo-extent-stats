@@ -1,80 +1,71 @@
 # nuxeo-extent-stats
 
-Create extent stats reports for UCLDC content in Nuxeo
+This repo contains code for creating Nuxeo extent stats reports.
 
-## Set up dev environment
+**Basic layout**:
 
-### Build docker image
+The script for generating the extent stats is `extentstats.py`.
 
-Clone this repo
+There is a `Dockerfile` for creating an image in which to run `exentstats.py`.
 
-```
-git clone git@github.com:ucldc/nuxeo-extent-stats.git
-cd nuxeo-extent-stats
-```
+The `sceptre` directory contains [sceptre](https://docs.sceptre-project.org) a CloudFormation template for creating a CodeBuild project and an ECS task in AWS.
 
-Build the docker image
+The `run-extent-stats.py` runs the `extentstats.py` script in a container on Fargate.
 
-```
-docker build -t nuxeoextent .
-```
+**TODOs**: there are still several things that are on the roadmap to get automated around building and deploying.
 
-### Run docker image in container
+## Run extent stats in Fargate
 
-First, copy `local.env` to `env.local`
+To run the extent stats generation in fargate (this is a manual process for now; planning on setting up in Airflow at some point):
 
-```
-cp local.env env.local
-```
+Make sure your AWS credentials for the `pad-dsc-admin` AWS account are set in your environment.
 
-Then, populate `env.local` with the relevant values. `S3_BUCKET` is the name of the bucket to which the metadata and reports will be written.
+Make sure that `NUXEO_TOKEN` environment is set in your environment. (You'll need to obtain a Nuxeo token for talking to the API if you don't already have one).
 
-If you do not provide an `=` then docker will read the value from your local environment. (See [docker documentation on --env-file](https://docs.docker.com/engine/reference/commandline/run/#set-environment-variables--e---env---env-file)). So if you've set the AWS auth env vars locally, then your env.local file might look something like this:
+To run the reports for one campus:
 
 ```
-CAMPUSES=["UCB","UCD","UCI","UCLA","UCM","UCOP","UCR","UCSC","UCSD","UCSF"]
-
-DEBUG=False
-
-# set to True as a very hacky workaround for when Nuxeo API was broken for ElasticSearch endpoint
-NUXEO_API_ES_ENDPOINT_BROKEN=False
-
-NUXEO_TOKEN=xxxxxxx-xxxx-xxxx-xxxx-xxxxxxx
-NUXEO_API=https://nuxeo.cdlib.org/nuxeo/site/api/v1
-S3_BUCKET=nuxeo-extent-stats-2023
-
-AWS_ACCESS_KEY_ID
-AWS_SECRET_ACCESS_KEY
-AWS_SESSION_TOKEN
+python run-extent-stats-task.py --campus UCSD
 ```
 
-Now, run the docker image in a container. Replace `/path/to/nuxeo-extent-stats` with your path to the `current_extent_stats` directory:
+To run the reports for all campuses (this will take a very long time! UCM and UCI take over 12 hours):
 
 ```
-docker run --rm -it -d --name nuxeoextent -v /your/path/to/nuxeo-extent-stats:/app --env-file env.local nuxeoextent
+python run-extent-stats-task.py --all
 ```
 
-The container will be removed on exit. Host directory `/your/path/to/nuxeo-extent-stats` will be mounted into the container. 
-
-### Make changes to the code
-
-Since your current working directory is mounted into the container, you can hack on the code on the host machine. Then when you're ready to run the code:
-
-
-### Create reports
-
-To create reports for all campuses:
+The script will output the ARN of the ECS task that was launched, e.g.:
 
 ```
-docker exec nuxeoextent python app/create_reports.py --all
+ECS task arn:aws:ecs:us-west-2:563907706919:task/nuxeo/f02c9bd725fe4ac99acd77bb12b8dc3e was started.
 ```
 
-To create a report for a single campus, i.e. UCSD:
+You can check on the status of the task in ECS. (Note: I'm not sure why the output from python doesn't immediately get written to CloudWatch logs).
+
+Metadata and reports are written to the `nuxeo-extent-stats` S3 bucket in the `pad-dsc-admin` AWS account.
+
+## Update Docker image
+
+Make any updates and push to github (main branch). Then trigger a new build of the `nuxeo-extent-stats` CodeBuild project. This will build a new image and push it to ECR.
+
+TODO: implement webhook to trigger build on push to main.
+
+
+## Local development
+
+You can use the `compose-dev.yaml` file to test out the docker files locally. Make sure your AWS env vars are set.
+
+Login to ECR public so that you can pull the python image:
 
 ```
-docker exec nuxeoextent python app/create_reports.py --campus UCSD
+aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
 ```
 
-### TO DO
+Then build and run the image:
 
-* set this up to run in Airflow or Fargate or somewhere else in the cloud
+```
+docker compose -f compose-dev.yaml up
+```
+
+You can of course run `extentstats.py` locally (not in Docker). See `env.local.example` what env vars need to be set.
+
