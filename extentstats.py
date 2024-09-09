@@ -652,7 +652,7 @@ if __name__ == "__main__":
     top_folder = parser.add_mutually_exclusive_group(required=True)
     top_folder.add_argument('--all', help="create reports for all campuses", action="store_true")
     top_folder.add_argument('--campus', help="single campus")
-    parser.add_argument('--version', help="Metadata version. If not provided, metadata will be fetched from S3.")
+    parser.add_argument('--version', help="Metadata version. If provided, metadata will be fetched from S3.")
 
     args = parser.parse_args()
     sys.exit(main(args))
