@@ -3,7 +3,6 @@ import argparse
 from collections import namedtuple
 from datetime import datetime
 import json
-import math
 import shutil
 
 import boto3
@@ -18,16 +17,8 @@ METADATA = os.environ.get('NUXEO_EXTENT_STATS_METADATA')
 REPORTS = os.environ.get('NUXEO_EXTENT_STATS_REPORTS')
 TEMP = os.environ.get('NUXEO_EXTENT_STATS_LOCAL_TEMPDIR')
 
-NUXEO_API_ES_ENDPOINT_BROKEN = os.environ.get('NUXEO_API_ES_ENDPOINT_BROKEN', False)
-NUXEO_TOKEN = os.environ.get('NUXEO_TOKEN')
-NUXEO_API = os.environ.get('NUXEO_API')
-NUXEO_REQUEST_HEADERS = {
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "X-NXDocumentProperties": "*",
-                "X-NXRepository": "default",
-                "X-Authentication-Token": NUXEO_TOKEN
-                }
+NUXEO_DBQUERY_URL = os.environ['NUXEO_DBQUERY_URL']
+NUXEO_DBQUERY_TOKEN = os.environ['NUXEO_DBQUERY_TOKEN']
 
 DataStorage = namedtuple(
     "DateStorage", "uri, store, bucket, path"
@@ -110,30 +101,17 @@ class Fetcher(object):
     def build_fetch_request(self):
         page = self.current_page_index
         if (page and page != -1) or page == 0:
-            query = f"SELECT * FROM SampleCustomPicture, CustomFile, CustomVideo, CustomAudio, CustomThreeD " \
-              f"WHERE ecm:ancestorId = '{self.uid}' AND " \
-              f"ecm:isVersion = 0 AND " \
-              f"ecm:isTrashed = 0 ORDER BY ecm:name"
-
-            headers = NUXEO_REQUEST_HEADERS
-
-            url = u'/'.join([NUXEO_API, "search/lang/NXQL/execute"])
-            params = {
-                'pageSize': f'{self.page_size}',
-                'currentPageIndex': self.current_page_index,
-                'query': query
+            payload = {
+                'uid': self.uid,
+                'doctype': 'records',
+                'results_type': 'full'
             }
-
-            request = {'url': url, 'headers': headers, 'params': params}
-            '''
-            print(
-                f"Fetching page"
-                f" {request.get('params').get('currentPageIndex')} "
-                f"at {request.get('url')} "
-                f"with query {request.get('params').get('query')} "
-                f"for path {self.path}"
-                )
-            '''
+            request = {
+                'url': NUXEO_DBQUERY_URL,
+                'data': json.dumps(payload),
+                'headers': {'Content-Type': 'application/json'},
+                'cookies': {'dbquerytoken': NUXEO_DBQUERY_TOKEN}
+            }
         else:
             request = None
             print("No more pages to fetch")
@@ -142,12 +120,6 @@ class Fetcher(object):
 
     def get_records(self, http_resp):
         response = http_resp.json()
-
-        results_count = response['resultsCount']
-        self.page_count = math.ceil(results_count / self.page_size)
-        if response['resultsCount'] > 10000:
-            print(f"{response['resultsCount']} RESULTS FOR {self.path}")
-
         documents = [doc for doc in response['entries']]
 
         return documents
@@ -158,14 +130,8 @@ class Fetcher(object):
         if resp.get('isNextPageAvailable'):
             self.current_page_index = self.current_page_index + 1
             self.write_page = self.write_page + 1
-        # horrible hack to get around 10k limit using nuxeo search API endpoint
-        elif self.current_page_index < self.page_count:
-            self.current_page_index = self.current_page_index + 1
-            self.write_page = self.write_page + 1
         else:
             self.current_page_index = -1
-
-        return
 
     def next_page(self):
         if self.current_page_index == -1:
@@ -181,16 +147,21 @@ class Fetcher(object):
         }
 
 def get_nuxeo_uid_for_path(path):
-    escaped_path = quote(path, safe=' /')
-    url = u'/'.join([NUXEO_API, "path", escaped_path.strip('/')])
-    headers = NUXEO_REQUEST_HEADERS
-    request = {'url': url, 'headers': headers}
-    response = requests.get(**request)
+    payload = {
+        'path': quote(path, safe=' /'),
+        'doctype': 'records',
+        'results_type': 'full',
+        'relation': 'self'
+    }
+    response = requests.get(
+        url=NUXEO_DBQUERY_URL,
+        data=json.dumps(payload),
+        headers={'Content-Type': 'application/json'},
+        cookies={'dbquerytoken': NUXEO_DBQUERY_TOKEN}
+    )
     response.raise_for_status()
-    json_response = response.json()
-    uid = json_response['uid']
 
-    return uid
+    return json.loads(response.text)['uid']
 
 def get_campus_folders_from_nuxeo(start_uid, path, depth=-1):
     '''
@@ -201,36 +172,20 @@ def get_campus_folders_from_nuxeo(start_uid, path, depth=-1):
 
     def recurse(uid, depth):
         if depth != 0:
-            query = f"SELECT * FROM Organization " \
-                    f"WHERE ecm:parentId = '{uid}' " \
-                    f"AND ecm:isTrashed = 0"
-            url = u'/'.join([NUXEO_API, "search/lang/NXQL/execute"])
-            headers = NUXEO_REQUEST_HEADERS
-            page_size = 1000
-            params = {
-                'pageSize': page_size,
-                'currentPageIndex': 0,
-                'query': query
+            payload = {
+                'uid': quote(uid),
+                'doctype': 'folders',
+                'results_type': 'full'
             }
-            request = {'url': url, 'headers': headers, 'params': params}
-
-            '''
-            print(
-                f"Fetching page"
-                f" {request.get('params').get('currentPageIndex')} "
-                f"at {request.get('url')} "
-                f"with query {request.get('params').get('query')} "
-                )
-            '''
-
-            response = requests.get(**request)
+            response = requests.get(
+                url=NUXEO_DBQUERY_URL,
+                data=json.dumps(payload),
+                headers={'Content-Type': 'application/json'},
+                cookies={'dbquerytoken': NUXEO_DBQUERY_TOKEN}
+            )
             response.raise_for_status()
-            response = response.json()
-            count = response['resultsCount']
+            response = json.loads(response.text)
             records = [{'uid': doc['uid'], 'path': doc['path']} for doc in response['entries']]
-
-            if count > 10000:
-                print(f"{response['resultsCount']} RESULTS FOR {path}")
             for record in records:
                 folders.append(
                     {
@@ -482,9 +437,9 @@ def add_doc_to_stats(stats, doc):
 
 def get_extent(doc):
     # query db for each record as a workaround while ES API endpoint is broken
-    if NUXEO_API_ES_ENDPOINT_BROKEN:
-        uid = doc['uid']
-        doc = get_metadata_from_db(uid)
+    # if NUXEO_API_ES_ENDPOINT_BROKEN:
+    #     uid = doc['uid']
+    #     doc = get_metadata_from_db(uid)
 
     extent = {
         "main_count": 0,
@@ -583,13 +538,13 @@ def get_extent(doc):
 
     return extent
 
-def get_metadata_from_db(uid):
-    url = u'/'.join([NUXEO_API, "id", uid])
-    request = {'url': url, 'headers': NUXEO_REQUEST_HEADERS}
-    response = requests.get(**request)
-    response.raise_for_status()
-    json_resp = response.json()
-    return json_resp
+# def get_metadata_from_db(uid):
+#     url = u'/'.join([NUXEO_API, "id", uid])
+#     request = {'url': url, 'headers': NUXEO_REQUEST_HEADERS}
+#     response = requests.get(**request)
+#     response.raise_for_status()
+#     json_resp = response.json()
+#     return json_resp
 
 def write_stats(stats, worksheet, rownum, rowname):
 
