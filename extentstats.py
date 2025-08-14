@@ -194,8 +194,7 @@ def get_folders(start_uid, depth=-1):
                         'parent_uid': uid
                     }
                 )
-                if response['isNextPageAvailable']:
-                    recurse(record['uid'], depth - 1)
+                recurse(record['uid'], depth - 1)
 
     recurse(start_uid, depth)
 
