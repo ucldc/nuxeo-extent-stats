@@ -73,7 +73,7 @@ class Fetcher(object):
         self.current_page_index = params.get('current_page_index', 0)
         self.write_page = params.get('write_page', 0)
         self.page_size = 100
-
+        
     def fetch_page(self):
         page = self.build_fetch_request()
         response = requests.get(**page)
@@ -103,7 +103,7 @@ class Fetcher(object):
         if (page and page != -1) or page == 0:
             payload = {
                 'uid': self.uid,
-                'doctype': 'records',
+                'doc_type': 'records',
                 'results_type': 'full'
             }
             request = {
@@ -149,7 +149,7 @@ class Fetcher(object):
 def get_nuxeo_uid_for_path(path):
     payload = {
         'path': quote(path, safe=' /'),
-        'doctype': 'records',
+        'doc_type': 'records',
         'results_type': 'full',
         'relation': 'self'
     }
@@ -163,7 +163,7 @@ def get_nuxeo_uid_for_path(path):
 
     return json.loads(response.text)['uid']
 
-def get_campus_folders_from_nuxeo(start_uid, path, depth=-1):
+def get_folders(start_uid, depth=-1):
     '''
     Get a list of Nuxeo folders below a given path, to a given depth
     Returns a list of dicts
@@ -174,7 +174,7 @@ def get_campus_folders_from_nuxeo(start_uid, path, depth=-1):
         if depth != 0:
             payload = {
                 'uid': quote(uid),
-                'doctype': 'folders',
+                'doc_type': 'folders',
                 'results_type': 'full'
             }
             response = requests.get(
@@ -194,7 +194,8 @@ def get_campus_folders_from_nuxeo(start_uid, path, depth=-1):
                         'parent_uid': uid
                     }
                 )
-                recurse(record['uid'], depth - 1)
+                if response['isNextPageAvailable']:
+                    recurse(record['uid'], depth - 1)
 
     recurse(start_uid, depth)
 
@@ -586,21 +587,41 @@ def main(params):
             version = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
             path = f"/asset-library/{campus}"
             uid = get_nuxeo_uid_for_path(path)
-            folders = get_campus_folders_from_nuxeo(uid, campus, 1)
+            folders = get_folders(uid, 1)
+            # get top level records
+            descendant_folders = []
             for folder in folders:
-                next_page = {
-                    "campus": campus,
-                    "path": folder['path'],
-                    "uid": folder['uid'],
-                    "version": version
-                }
+                print(f"top level folder: {folder['path']}")
+                #get_pages_of_records(folder['uid'])
+                # next_page = {
+                #     "campus": campus,
+                #     "path": folder['path'],
+                #     "uid": folder['uid'],
+                #     "version": version
+                # }
 
-                while next_page:
-                    fetcher = Fetcher(next_page)
-                    fetcher.fetch_page()
-                    next_page = fetcher.next_page()
+                # while next_page:
+                #     fetcher = Fetcher(next_page)
+                #     fetcher.fetch_page()
+                #     next_page = fetcher.next_page()
 
-        create_extent_report(campus, version)
+                descendant_folders = get_folders(folder['uid'], -1)
+                for descendent_folder in descendant_folders:
+                    print(f"descendant folder: {descendent_folder['path']}")
+
+                    # get first level records and all components
+                    # get_parents
+                    # for parent in parents:
+                    #     get_components
+
+                    # get subfolders
+                    # subfolders = get_folders(uid, 1)
+                    # for subfolder in subfolders:
+                    #     get_parents
+                    #     for parent in parents:
+                    #         get_components
+
+        # create_extent_report(campus, version)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="create nuxeo extent stats report(s)")
