@@ -71,11 +71,13 @@ class Fetcher(object):
         self.uid = params.get('uid')
         self.version = params.get('version')
         self.current_page_index = params.get('current_page_index', 0)
+        self.resume_after = params.get('resume_after', '')
         self.write_page = params.get('write_page', 0)
         self.page_size = 100
         
     def fetch_page(self):
         page = self.build_fetch_request()
+        print(f"page: {page}")
         response = requests.get(**page)
         response.raise_for_status()
         records = self.get_records(response)
@@ -104,7 +106,8 @@ class Fetcher(object):
             payload = {
                 'uid': self.uid,
                 'doc_type': 'records',
-                'results_type': 'full'
+                'results_type': 'full',
+                'resume_after': self.resume_after
             }
             request = {
                 'url': NUXEO_DBQUERY_URL,
@@ -130,6 +133,7 @@ class Fetcher(object):
         if resp.get('isNextPageAvailable'):
             self.current_page_index = self.current_page_index + 1
             self.write_page = self.write_page + 1
+            self.resume_after = resp.get('resumeAfter')
         else:
             self.current_page_index = -1
 
@@ -143,7 +147,8 @@ class Fetcher(object):
             "uid": self.uid,
             "version": self.version,
             "current_page_index": self.current_page_index,
-            "write_page": self.write_page
+            "write_page": self.write_page,
+            "resume_after": self.resume_after
         }
 
 def get_nuxeo_uid_for_path(path):
@@ -586,41 +591,26 @@ def main(params):
             version = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
             path = f"/asset-library/{campus}"
             uid = get_nuxeo_uid_for_path(path)
-            folders = get_folders(uid, 1)
-            # get top level records
-            descendant_folders = []
-            for folder in folders:
-                print(f"top level folder: {folder['path']}")
-                #get_pages_of_records(folder['uid'])
-                # next_page = {
-                #     "campus": campus,
-                #     "path": folder['path'],
-                #     "uid": folder['uid'],
-                #     "version": version
-                # }
+            root_folders = get_folders(uid, 1)
+            for root_folder in root_folders:
+                descendant_folders = get_folders(root_folder['uid'], -1)
+                for folder in [root_folder] + descendant_folders:
+                    print(f"{folder['path']}")
 
-                # while next_page:
-                #     fetcher = Fetcher(next_page)
-                #     fetcher.fetch_page()
-                #     next_page = fetcher.next_page()
+                    next_page = {
+                        "campus": campus,
+                        "path": folder['path'],
+                        "uid": folder['uid'],
+                        "version": version
+                    }
 
-                descendant_folders = get_folders(folder['uid'], -1)
-                for descendent_folder in descendant_folders:
-                    print(f"descendant folder: {descendent_folder['path']}")
+                    while next_page:
+                        fetcher = Fetcher(next_page)
+                        fetcher.fetch_page()
+                        next_page = fetcher.next_page()
 
-                    # get first level records and all components
-                    # get_parents
-                    # for parent in parents:
-                    #     get_components
 
-                    # get subfolders
-                    # subfolders = get_folders(uid, 1)
-                    # for subfolder in subfolders:
-                    #     get_parents
-                    #     for parent in parents:
-                    #         get_components
-
-        # create_extent_report(campus, version)
+                    # create_extent_report(campus, version)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="create nuxeo extent stats report(s)")
