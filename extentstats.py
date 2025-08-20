@@ -98,44 +98,43 @@ def get_nuxeo_uid_for_path(path):
 
     return json.loads(response.text)['uid']
 
-def get_folders(start_uid, depth=-1):
-    '''
-    Get a list of Nuxeo folders below a given path, to a given depth
-    Returns a list of dicts
-    '''
-
-    # TODO deal with more pages of folders!!!!
+def fetch_folders(root):
     folders = []
 
-    def recurse(uid, depth):
-        if depth != 0:
-            payload = {
-                'uid': quote(uid),
-                'doc_type': 'folders',
-                'results_type': 'full'
-            }
-            response = requests.get(
-                url=NUXEO_DBQUERY_URL,
-                data=json.dumps(payload),
-                headers={'Content-Type': 'application/json'},
-                cookies={'dbquerytoken': NUXEO_DBQUERY_TOKEN}
-            )
-            response.raise_for_status()
-            response = json.loads(response.text)
-            records = [{'uid': doc['uid'], 'path': doc['path']} for doc in response['entries']]
-            for record in records:
-                folders.append(
-                    {
-                        'uid': record['uid'],
-                        'path': record['path'],
-                        'parent_uid': uid
-                    }
-                )
-                recurse(record['uid'], depth - 1)
+    def recurse(pages):
+        folders.extend(pages)
+        for page in pages:
+            child_folder_pages = get_pages_of_folders(page)
+            recurse(child_folder_pages)
 
-    recurse(start_uid, depth)
+    # get root folders
+    root_folder_pages = get_pages_of_folders(root)
+
+    # recurse down the tree to fetch any nested folders
+    recurse(root_folder_pages)
 
     return folders
+
+def get_pages_of_folders(root_folder: dict):
+    next_page = True
+    resume_after = ''
+    folders = []
+    while next_page:
+        resp = query_nuxeo(root_folder, 'folders', 'full', resume_after)
+        next_page = resp.json().get('isNextPageAvailable')
+        resume_after = resp.json().get('resumeAfter')
+        records = [{'uid': doc['uid'], 'path': doc['path']} for doc in resp.json().get('entries', [])]
+        for record in records:
+            folders.append(
+                {
+                    'uid': record['uid'],
+                    'path': record['path'],
+                    'parent_uid': root_folder['uid']
+                }
+            )
+
+    return folders
+
 
 def get_campus_folders_from_storage(campus, version):
     '''
@@ -323,7 +322,13 @@ def get_stats(campus, version, folder):
     data = parse_data_uri(METADATA)
     if data.store == 'file':
         metadata_dir = os.path.join(data.path, campus, version, folder)
-        for file in os.listdir(metadata_dir):
+        children_dir = os.path.join(metadata_dir, "children")
+        files = os.listdir(metadata_dir) + os.listdir(children_dir)
+        filepaths = [os.path.join(metadata_dir, file) for file in os.listdir(metadata_dir)] \
+            + [os.path.join(children_dir, file) for file in os.listdir(children_dir)]
+
+
+        for file in files:
             with open(os.path.join(metadata_dir, file), "r") as f:
                 for line in f.readlines():
                     stats = add_doc_to_stats(stats, line)
@@ -510,7 +515,7 @@ def fetch_records(root: dict, campus: str, version: str):
     resume_after = ''
     write_page = 0
     while next_page:
-        resp = query_nuxeo(root, 'full', resume_after)
+        resp = query_nuxeo(root, 'records', 'full', resume_after)
         next_page = resp.json().get('isNextPageAvailable')
         resume_after = resp.json().get('resumeAfter')
         records = resp.json().get('entries', [])
@@ -525,9 +530,9 @@ def fetch_records(root: dict, campus: str, version: str):
 
         # get any component records and write to storage
         for record in records:
-            fetch_components(record, campus, version)
+            fetch_components(record, campus, version, root)
 
-def fetch_components(root_record: dict, campus: str, version: str):
+def fetch_components(root_record: dict, campus: str, version: str, folder: dict):
     '''
     Fetch pages of components for a given record uid
     It is possible for components to be nested inside components; in the case
@@ -554,7 +559,7 @@ def fetch_components(root_record: dict, campus: str, version: str):
     page_count = 0
     for page in component_pages:
         records = page.get('entries', [])
-        path = "children"
+        path = f"{folder['path']}/children"
         page_name = f"{root_record['uid']}-{page_count}"
         store_page_of_records(records, path, campus, version, page_name)
         page_count += 1
@@ -565,7 +570,7 @@ def get_pages_of_child_components(record: dict):
     resume_after = ''
     components = []
     while next_page:
-        resp = query_nuxeo(record, 'full', resume_after)
+        resp = query_nuxeo(record, 'records', 'full', resume_after)
         next_page = resp.json().get('isNextPageAvailable')
         resume_after = resp.json().get('resumeAfter')
         records = resp.json().get('entries', [])
@@ -587,10 +592,10 @@ def get_pages_of_child_components(record: dict):
     return pages
 
 
-def query_nuxeo(root: dict, results_type: str, resume_after: str):
+def query_nuxeo(root: dict, doc_type: str, results_type: str, resume_after: str):
     payload = {
         'uid': root['uid'],
-        'doc_type': 'records',
+        'doc_type': doc_type,
         'results_type': results_type,
         'resume_after': resume_after
     }
@@ -645,11 +650,8 @@ def main(params):
             version = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
             path = f"/asset-library/{campus}"
             uid = get_nuxeo_uid_for_path(path)
-            root_folders = get_folders(uid, 1)
-            for root_folder in root_folders:
-                descendant_folders = get_folders(root_folder['uid'], -1)
-                for folder in [root_folder] + descendant_folders:
-                    fetch_records(folder, campus, version)
+            for folder in fetch_folders({'uid': uid}):
+                fetch_records(folder, campus, version)
 
         # create_extent_report(campus, version)
 
