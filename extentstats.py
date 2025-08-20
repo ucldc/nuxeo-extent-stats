@@ -322,17 +322,13 @@ def get_stats(campus, version, folder):
     data = parse_data_uri(METADATA)
     if data.store == 'file':
         metadata_dir = os.path.join(data.path, campus, version, folder)
-        children_dir = os.path.join(metadata_dir, "children")
-        files = os.listdir(metadata_dir) + os.listdir(children_dir)
-        filepaths = [os.path.join(metadata_dir, file) for file in os.listdir(metadata_dir)] \
-            + [os.path.join(children_dir, file) for file in os.listdir(children_dir)]
-
-
-        for file in files:
-            with open(os.path.join(metadata_dir, file), "r") as f:
-                for line in f.readlines():
-                    stats = add_doc_to_stats(stats, line)
-                    doc_count += 1
+        for root, dirs, files in os.walk(metadata_dir):
+            for file in files:
+                filepath = os.path.join(root, file)
+                with open(filepath, "r") as f:
+                    for line in f.readlines():
+                        stats = add_doc_to_stats(stats, line)
+                        doc_count += 1
     elif data.store == 's3':
         s3_client = boto3.client('s3')
         paginator = s3_client.get_paginator('list_objects_v2')
@@ -653,7 +649,7 @@ def main(params):
             for folder in fetch_folders({'uid': uid}):
                 fetch_records(folder, campus, version)
 
-        # create_extent_report(campus, version)
+        create_extent_report(campus, version)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="create nuxeo extent stats report(s)")
