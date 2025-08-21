@@ -20,7 +20,7 @@ To run the extent stats generation in fargate (this is a manual process for now;
 
 Make sure your AWS credentials for the `pad-dsc-admin` AWS account are set in your environment.
 
-Make sure that `NUXEO_TOKEN` environment is set in your environment. (You'll need to obtain a Nuxeo token for using the API if you don't already have one).
+Make sure that env vars are set in your environment. See `env.local.example` for variables to set.
 
 To run the reports for one campus:
 

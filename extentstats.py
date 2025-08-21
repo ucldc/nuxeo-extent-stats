@@ -3,12 +3,12 @@ import argparse
 from collections import namedtuple
 from datetime import datetime
 import json
-import math
 import shutil
 
 import boto3
 import humanize
 import requests
+from requests.adapters import HTTPAdapter, Retry
 from urllib.parse import quote, urlparse
 import xlsxwriter
 
@@ -18,26 +18,36 @@ METADATA = os.environ.get('NUXEO_EXTENT_STATS_METADATA')
 REPORTS = os.environ.get('NUXEO_EXTENT_STATS_REPORTS')
 TEMP = os.environ.get('NUXEO_EXTENT_STATS_LOCAL_TEMPDIR')
 
-NUXEO_API_ES_ENDPOINT_BROKEN = os.environ.get('NUXEO_API_ES_ENDPOINT_BROKEN', False)
-NUXEO_TOKEN = os.environ.get('NUXEO_TOKEN')
-NUXEO_API = os.environ.get('NUXEO_API')
-NUXEO_REQUEST_HEADERS = {
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "X-NXDocumentProperties": "*",
-                "X-NXRepository": "default",
-                "X-Authentication-Token": NUXEO_TOKEN
-                }
+NUXEO_DBQUERY_URL = os.environ['NUXEO_DBQUERY_URL']
+NUXEO_DBQUERY_TOKEN = os.environ['NUXEO_DBQUERY_TOKEN']
 
 DataStorage = namedtuple(
     "DateStorage", "uri, store, bucket, path"
 )
+
+NUXEO_API_URL = os.environ.get('NUXEO_API_URL')
+NUXEO_API_TOKEN = os.environ.get('NUXEO_API_TOKEN')
 
 def parse_data_uri(data_uri: str):
     data_loc = urlparse(data_uri)
     return DataStorage(
         data_uri, data_loc.scheme, data_loc.netloc, data_loc.path)
 
+DATA = parse_data_uri(METADATA)
+
+def configure_http_session() -> requests.Session:
+    http = requests.Session()
+    retry_strategy = Retry(
+        total=3,
+        backoff_factor=2,
+        status_forcelist=[413, 429, 500, 502, 503, 504]
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    http.mount("https://", adapter)
+    http.mount("http://", adapter)
+    return http
+
+HTTP_SESSION = configure_http_session()
 
 def load_file_to_s3(bucket, key, filepath):
     s3_client = boto3.client('s3')
@@ -73,177 +83,61 @@ def write_object_to_local(dir, filename, content):
     with open(fullpath, "w") as f:
         f.write(content)
 
-class Fetcher(object):
-    def __init__(self, params):
-        self.campus = params.get('campus')
-        self.path = params.get('path')
-        self.uid = params.get('uid')
-        self.version = params.get('version')
-        self.current_page_index = params.get('current_page_index', 0)
-        self.write_page = params.get('write_page', 0)
-        self.page_size = 100
-
-    def fetch_page(self):
-        page = self.build_fetch_request()
-        response = requests.get(**page)
-        response.raise_for_status()
-        records = self.get_records(response)
-
-        if len(records) > 0:
-            data = parse_data_uri(METADATA)
-            if data.store == 'file':
-                folder_path = self.path.removeprefix(f'/asset-library/{self.campus}/')
-                dir = os.path.join(data.path, self.campus, self.version, folder_path)
-                filename = os.path.join(dir, f"{self.write_page}.jsonl")
-                jsonl = "\n".join([json.dumps(record) for record in records])
-                jsonl = f"{jsonl}\n"
-                write_object_to_local(dir, filename, jsonl)
-            elif data.store == 's3':
-                folder_path = self.path.removeprefix(f'/asset-library/{self.campus}/')
-                base_folder = data.path
-                s3_key = f"{base_folder.lstrip('/')}/{self.campus}/{self.version}/{folder_path}/{self.write_page}.jsonl"
-                jsonl = "\n".join([json.dumps(record) for record in records])
-                load_object_to_s3(data.bucket, s3_key, jsonl)
-
-        self.increment(response)
-
-    def build_fetch_request(self):
-        page = self.current_page_index
-        if (page and page != -1) or page == 0:
-            query = f"SELECT * FROM SampleCustomPicture, CustomFile, CustomVideo, CustomAudio, CustomThreeD " \
-              f"WHERE ecm:ancestorId = '{self.uid}' AND " \
-              f"ecm:isVersion = 0 AND " \
-              f"ecm:isTrashed = 0 ORDER BY ecm:name"
-
-            headers = NUXEO_REQUEST_HEADERS
-
-            url = u'/'.join([NUXEO_API, "search/lang/NXQL/execute"])
-            params = {
-                'pageSize': f'{self.page_size}',
-                'currentPageIndex': self.current_page_index,
-                'query': query
-            }
-
-            request = {'url': url, 'headers': headers, 'params': params}
-            '''
-            print(
-                f"Fetching page"
-                f" {request.get('params').get('currentPageIndex')} "
-                f"at {request.get('url')} "
-                f"with query {request.get('params').get('query')} "
-                f"for path {self.path}"
-                )
-            '''
-        else:
-            request = None
-            print("No more pages to fetch")
-
-        return request
-
-    def get_records(self, http_resp):
-        response = http_resp.json()
-
-        results_count = response['resultsCount']
-        self.page_count = math.ceil(results_count / self.page_size)
-        if response['resultsCount'] > 10000:
-            print(f"{response['resultsCount']} RESULTS FOR {self.path}")
-
-        documents = [doc for doc in response['entries']]
-
-        return documents
-
-    def increment(self, http_resp):
-        resp = http_resp.json()
-
-        if resp.get('isNextPageAvailable'):
-            self.current_page_index = self.current_page_index + 1
-            self.write_page = self.write_page + 1
-        # horrible hack to get around 10k limit using nuxeo search API endpoint
-        elif self.current_page_index < self.page_count:
-            self.current_page_index = self.current_page_index + 1
-            self.write_page = self.write_page + 1
-        else:
-            self.current_page_index = -1
-
-        return
-
-    def next_page(self):
-        if self.current_page_index == -1:
-            return None
-
-        return {
-            "campus": self.campus,
-            "path": self.path,
-            "uid": self.uid,
-            "version": self.version,
-            "current_page_index": self.current_page_index,
-            "write_page": self.write_page
-        }
 
 def get_nuxeo_uid_for_path(path):
-    escaped_path = quote(path, safe=' /')
-    url = u'/'.join([NUXEO_API, "path", escaped_path.strip('/')])
-    headers = NUXEO_REQUEST_HEADERS
-    request = {'url': url, 'headers': headers}
-    response = requests.get(**request)
+    payload = {
+        'path': quote(path, safe=' /'),
+        'doc_type': 'records',
+        'results_type': 'full',
+        'relation': 'self'
+    }
+    response = requests.get(
+        url=NUXEO_DBQUERY_URL,
+        data=json.dumps(payload),
+        headers={'Content-Type': 'application/json'},
+        cookies={'dbquerytoken': NUXEO_DBQUERY_TOKEN}
+    )
     response.raise_for_status()
-    json_response = response.json()
-    uid = json_response['uid']
 
-    return uid
+    return json.loads(response.text)['uid']
 
-def get_campus_folders_from_nuxeo(start_uid, path, depth=-1):
-    '''
-    Get a list of Nuxeo folders below a given path, to a given depth
-    Returns a list of dicts
-    '''
+def fetch_folders(root):
     folders = []
 
-    def recurse(uid, depth):
-        if depth != 0:
-            query = f"SELECT * FROM Organization " \
-                    f"WHERE ecm:parentId = '{uid}' " \
-                    f"AND ecm:isTrashed = 0"
-            url = u'/'.join([NUXEO_API, "search/lang/NXQL/execute"])
-            headers = NUXEO_REQUEST_HEADERS
-            page_size = 1000
-            params = {
-                'pageSize': page_size,
-                'currentPageIndex': 0,
-                'query': query
-            }
-            request = {'url': url, 'headers': headers, 'params': params}
+    def recurse(pages):
+        folders.extend(pages)
+        for page in pages:
+            child_folder_pages = get_pages_of_folders(page)
+            recurse(child_folder_pages)
 
-            '''
-            print(
-                f"Fetching page"
-                f" {request.get('params').get('currentPageIndex')} "
-                f"at {request.get('url')} "
-                f"with query {request.get('params').get('query')} "
-                )
-            '''
+    # get root folders
+    root_folder_pages = get_pages_of_folders(root)
 
-            response = requests.get(**request)
-            response.raise_for_status()
-            response = response.json()
-            count = response['resultsCount']
-            records = [{'uid': doc['uid'], 'path': doc['path']} for doc in response['entries']]
-
-            if count > 10000:
-                print(f"{response['resultsCount']} RESULTS FOR {path}")
-            for record in records:
-                folders.append(
-                    {
-                        'uid': record['uid'],
-                        'path': record['path'],
-                        'parent_uid': uid
-                    }
-                )
-                recurse(record['uid'], depth - 1)
-
-    recurse(start_uid, depth)
+    # recurse down the tree to fetch any nested folders
+    recurse(root_folder_pages)
 
     return folders
+
+def get_pages_of_folders(root_folder: dict):
+    next_page = True
+    resume_after = ''
+    folders = []
+    while next_page:
+        resp = query_nuxeo_db_directly(root_folder, 'folders', 'full', resume_after)
+        next_page = resp.json().get('isNextPageAvailable')
+        resume_after = resp.json().get('resumeAfter')
+        records = [{'uid': doc['uid'], 'path': doc['path']} for doc in resp.json().get('entries', [])]
+        for record in records:
+            folders.append(
+                {
+                    'uid': record['uid'],
+                    'path': record['path'],
+                    'parent_uid': root_folder['uid']
+                }
+            )
+
+    return folders
+
 
 def get_campus_folders_from_storage(campus, version):
     '''
@@ -431,11 +325,13 @@ def get_stats(campus, version, folder):
     data = parse_data_uri(METADATA)
     if data.store == 'file':
         metadata_dir = os.path.join(data.path, campus, version, folder)
-        for file in os.listdir(metadata_dir):
-            with open(os.path.join(metadata_dir, file), "r") as f:
-                for line in f.readlines():
-                    stats = add_doc_to_stats(stats, line)
-                    doc_count += 1
+        for root, dirs, files in os.walk(metadata_dir):
+            for file in files:
+                filepath = os.path.join(root, file)
+                with open(filepath, "r") as f:
+                    for line in f.readlines():
+                        stats = add_doc_to_stats(stats, line)
+                        doc_count += 1
     elif data.store == 's3':
         s3_client = boto3.client('s3')
         paginator = s3_client.get_paginator('list_objects_v2')
@@ -463,10 +359,13 @@ def get_stats(campus, version, folder):
 
 def add_doc_to_stats(stats, doc):
 
-    doc = json.loads(doc)
-    doc_extent = get_extent(doc)
+    # Query database using Nuxeo API to get full metadata
+    uid = json.loads(doc)['uid']
+    print(f"hitting nuxeo API for {uid}")
+    full_metadata = hit_nuxeo_api(uid)
+    doc_extent = get_extent(full_metadata)
 
-    stats['docs'].append(f"{doc['uid']}, {doc['path']}\n")
+    stats['docs'].append(f"{full_metadata['uid']}, {full_metadata['path']}\n")
     stats['main_count'] += doc_extent['main_count']
     stats['main_size'] += doc_extent['main_size']
     stats['filetab_count'] += doc_extent['filetab_count']
@@ -481,11 +380,6 @@ def add_doc_to_stats(stats, doc):
     return stats
 
 def get_extent(doc):
-    # query db for each record as a workaround while ES API endpoint is broken
-    if NUXEO_API_ES_ENDPOINT_BROKEN:
-        uid = doc['uid']
-        doc = get_metadata_from_db(uid)
-
     extent = {
         "main_count": 0,
         "main_size": 0,
@@ -583,9 +477,17 @@ def get_extent(doc):
 
     return extent
 
-def get_metadata_from_db(uid):
-    url = u'/'.join([NUXEO_API, "id", uid])
-    request = {'url': url, 'headers': NUXEO_REQUEST_HEADERS}
+def hit_nuxeo_api(uid):
+    ''' Hit the Nuxeo API to get full record metadata '''
+    url = u'/'.join([NUXEO_API_URL, "id", uid])
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "X-NXDocumentProperties": "*",
+        "X-NXRepository": "default",
+        "X-Authentication-Token": NUXEO_API_TOKEN
+        }
+    request = {'url': url, 'headers': headers}
     response = requests.get(**request)
     response.raise_for_status()
     json_resp = response.json()
@@ -613,6 +515,133 @@ def write_stats(stats, worksheet, rownum, rowname):
         worksheet.write(rownum, col, d)
         col = col + 1
 
+def fetch_records(root: dict, campus: str, version: str):
+    '''
+        Fetch a listing of all records for a given root document
+        in batches (pages) of 100, and write each page to storage.
+    '''
+    next_page = True
+    resume_after = ''
+    write_page = 0
+    while next_page:
+        resp = query_nuxeo_db_directly(root, 'records', 'listing', resume_after)
+        next_page = resp.json().get('isNextPageAvailable')
+        resume_after = resp.json().get('resumeAfter')
+        records = resp.json().get('entries', [])
+
+        if not records:
+            next_page = False
+            continue
+
+        # write page of parent records to storage
+        store_page_of_records(records, root['path'], campus, version, write_page)
+        write_page += 1
+
+        # get any component records and write to storage
+        for record in records:
+            fetch_components(record, campus, version, root)
+
+def fetch_components(root_record: dict, campus: str, version: str, folder: dict):
+    '''
+    Fetch pages of components for a given record uid
+    It is possible for components to be nested inside components; in the case
+    of multiple layers, the hierarchy is ignored and all layers of components
+    are considered to to be children of the root record.
+    '''
+    component_pages = []
+
+    def recurse(pages):
+        component_pages.extend(pages)
+        for page in pages:
+            records = page.get('entries', [])
+            for record in records:
+                child_component_pages = get_pages_of_child_components(record)
+                recurse(child_component_pages)
+
+    # get components of root record
+    root_component_pages = get_pages_of_child_components(root_record)
+
+    # recurse down the tree to fetch any nested components
+    recurse(root_component_pages)
+
+    # write component pages to storage
+    page_count = 0
+    for page in component_pages:
+        records = page.get('entries', [])
+        path = f"{folder['path']}/children"
+        page_name = f"{root_record['uid']}-{page_count}"
+        store_page_of_records(records, path, campus, version, page_name)
+        page_count += 1
+
+
+def get_pages_of_child_components(record: dict):
+    next_page = True
+    resume_after = ''
+    components = []
+    while next_page:
+        resp = query_nuxeo_db_directly(record, 'records', 'listing', resume_after)
+        next_page = resp.json().get('isNextPageAvailable')
+        resume_after = resp.json().get('resumeAfter')
+        records = resp.json().get('entries', [])
+
+        if not records:
+            next_page = False
+            continue
+
+        components.extend(records)
+
+    # batch components into pages of 100
+    # not sure if this is necessary, but let's copy the rikolti nuxeo fetcher
+    # TODO: in python3.12 we can use itertools.batched
+    batch_size = 100
+    pages = []
+    for i in range(0, len(components), batch_size):
+        pages.append({"entries": components[i:i+batch_size]})
+
+    return pages
+
+
+def query_nuxeo_db_directly(root: dict, doc_type: str, results_type: str, resume_after: str):
+    ''' Use the nuxeo cdl_dbquery lambda to fetch nuxeo records from the db '''
+    payload = {
+        'uid': root['uid'],
+        'doc_type': doc_type,
+        'results_type': results_type,
+        'resume_after': resume_after
+    }
+
+    request = {
+        'url': NUXEO_DBQUERY_URL,
+        'headers': {'Content-Type': 'application/json'},
+        'cookies': {'dbquerytoken': NUXEO_DBQUERY_TOKEN},
+        'data': json.dumps(payload)
+    }
+
+    try:
+        response = HTTP_SESSION.get(**request)
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        print(f"Unable to fetch page {request}")
+        raise(e)
+    return response
+
+
+def store_page_of_records(records: list, path: str, campus: str, version: str, page_name: str):
+    if DATA.store == 'file':
+        folder_path = path.removeprefix(f'/asset-library/{campus}/')
+        dir = os.path.join(DATA.path, campus, version, folder_path)
+        filename = os.path.join(dir, f"{page_name}.jsonl")
+        jsonl = "\n".join([json.dumps(record) for record in records])
+        jsonl = f"{jsonl}\n"
+        write_object_to_local(dir, filename, jsonl)
+    elif DATA.store == 's3':
+        folder_path = path.removeprefix(f'/asset-library/{campus}/')
+        base_folder = DATA.path
+        s3_key = f"{base_folder.lstrip('/')}/{campus}/{version}/{folder_path}/{page_name}.jsonl"
+        jsonl = "\n".join([json.dumps(record) for record in records])
+        load_object_to_s3(DATA.bucket, s3_key, jsonl)
+
+
 def main(params):
     if params.campus:
         campuses = [params.campus]
@@ -631,19 +660,8 @@ def main(params):
             version = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
             path = f"/asset-library/{campus}"
             uid = get_nuxeo_uid_for_path(path)
-            folders = get_campus_folders_from_nuxeo(uid, campus, 1)
-            for folder in folders:
-                next_page = {
-                    "campus": campus,
-                    "path": folder['path'],
-                    "uid": folder['uid'],
-                    "version": version
-                }
-
-                while next_page:
-                    fetcher = Fetcher(next_page)
-                    fetcher.fetch_page()
-                    next_page = fetcher.next_page()
+            for folder in fetch_folders({'uid': uid}):
+                fetch_records(folder, campus, version)
 
         create_extent_report(campus, version)
 
