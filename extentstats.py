@@ -361,7 +361,6 @@ def add_doc_to_stats(stats, doc):
 
     # Query database using Nuxeo API to get full metadata
     uid = json.loads(doc)['uid']
-    print(f"hitting nuxeo API for {uid}")
     full_metadata = hit_nuxeo_api(uid)
     doc_extent = get_extent(full_metadata)
 

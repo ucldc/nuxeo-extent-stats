@@ -10,6 +10,7 @@ parameters:
   MetadataUri: "s3://nuxeo-extent-stats/metadata"
   ReportsUri: "s3://nuxeo-extent-stats/reports"
   TempDir: "/nuxeo-extent-stats/tmp"
-  EsEndPointBroken: "False"
-  NuxeoToken: !environment_variable NUXEO_TOKEN
-  NuxeoApiEndpoint: "https://nuxeo.cdlib.org/nuxeo/site/api/v1"
+  NuxeoApiToken: !environment_variable NUXEO_API_TOKEN
+  NuxeoApiUrl: "https://nuxeo.cdlib.org/nuxeo/site/api/v1"
+  NuxeoDbQueryToken: !environment_variable NUXEO_DBQUERY_TOKEN
+  NuxeoDbQueryUrl: "https://nuxeo.cdlib.org/cdl_dbquery"

@@ -21,11 +21,13 @@ Parameters:
     Type: String
   TempDir:
     Type: String
-  EsEndPointBroken:
+  NuxeoApiToken:
     Type: String
-  NuxeoToken:
+  NuxeoApiUrl:
     Type: String
-  NuxeoApiEndpoint:
+  NuxeoDbQueryToken:
+    Type: String
+  NuxeoDbQueryUrl:
     Type: String
 Resources:
   NuxeoExtentStatsCodeBuildRole:
@@ -267,11 +269,13 @@ Resources:
               Value: !Ref ReportsUri
             - Name: NUXEO_EXTENT_STATS_LOCAL_TEMPDIR
               Value: !Ref TempDir
-            - Name: NUXEO_API_ES_ENDPOINT_BROKEN
-              Value: !Ref EsEndPointBroken
-            - Name: NUXEO_TOKEN
-              Value: !Ref NuxeoToken
-            - Name: NUXEO_API
-              Value: !Ref NuxeoApiEndpoint
+            - Name: NUXEO_API_TOKEN
+              Value: !Ref NuxeoApiToken
+            - Name: NUXEO_API_URL
+              Value: !Ref NuxeoApiUrl
+            - Name: NUXEO_DBQUERY_TOKEN
+              Value: !Ref NuxeoDbQueryToken
+            - Name: NUXEO_DBQUERY_URL
+              Value: !Ref NuxeoDbQueryUrl
           LinuxParameters:
             InitProcessEnabled: true
