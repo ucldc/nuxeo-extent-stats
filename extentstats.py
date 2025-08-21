@@ -25,6 +25,9 @@ DataStorage = namedtuple(
     "DateStorage", "uri, store, bucket, path"
 )
 
+NUXEO_API_URL = os.environ.get('NUXEO_API_URL')
+NUXEO_API_TOKEN = os.environ.get('NUXEO_API_TOKEN')
+
 def parse_data_uri(data_uri: str):
     data_loc = urlparse(data_uri)
     return DataStorage(
@@ -120,7 +123,7 @@ def get_pages_of_folders(root_folder: dict):
     resume_after = ''
     folders = []
     while next_page:
-        resp = query_nuxeo(root_folder, 'folders', 'full', resume_after)
+        resp = query_nuxeo_db_directly(root_folder, 'folders', 'full', resume_after)
         next_page = resp.json().get('isNextPageAvailable')
         resume_after = resp.json().get('resumeAfter')
         records = [{'uid': doc['uid'], 'path': doc['path']} for doc in resp.json().get('entries', [])]
@@ -356,10 +359,13 @@ def get_stats(campus, version, folder):
 
 def add_doc_to_stats(stats, doc):
 
-    doc = json.loads(doc)
-    doc_extent = get_extent(doc)
+    # Query database using Nuxeo API to get full metadata
+    uid = json.loads(doc)['uid']
+    print(f"hitting nuxeo API for {uid}")
+    full_metadata = hit_nuxeo_api(uid)
+    doc_extent = get_extent(full_metadata)
 
-    stats['docs'].append(f"{doc['uid']}, {doc['path']}\n")
+    stats['docs'].append(f"{full_metadata['uid']}, {full_metadata['path']}\n")
     stats['main_count'] += doc_extent['main_count']
     stats['main_size'] += doc_extent['main_size']
     stats['filetab_count'] += doc_extent['filetab_count']
@@ -374,11 +380,6 @@ def add_doc_to_stats(stats, doc):
     return stats
 
 def get_extent(doc):
-    # query db for each record as a workaround while ES API endpoint is broken
-    # if NUXEO_API_ES_ENDPOINT_BROKEN:
-    #     uid = doc['uid']
-    #     doc = get_metadata_from_db(uid)
-
     extent = {
         "main_count": 0,
         "main_size": 0,
@@ -476,13 +477,21 @@ def get_extent(doc):
 
     return extent
 
-# def get_metadata_from_db(uid):
-#     url = u'/'.join([NUXEO_API, "id", uid])
-#     request = {'url': url, 'headers': NUXEO_REQUEST_HEADERS}
-#     response = requests.get(**request)
-#     response.raise_for_status()
-#     json_resp = response.json()
-#     return json_resp
+def hit_nuxeo_api(uid):
+    ''' Hit the Nuxeo API to get full record metadata '''
+    url = u'/'.join([NUXEO_API_URL, "id", uid])
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "X-NXDocumentProperties": "*",
+        "X-NXRepository": "default",
+        "X-Authentication-Token": NUXEO_API_TOKEN
+        }
+    request = {'url': url, 'headers': headers}
+    response = requests.get(**request)
+    response.raise_for_status()
+    json_resp = response.json()
+    return json_resp
 
 def write_stats(stats, worksheet, rownum, rowname):
 
@@ -507,11 +516,15 @@ def write_stats(stats, worksheet, rownum, rowname):
         col = col + 1
 
 def fetch_records(root: dict, campus: str, version: str):
+    '''
+        Fetch a listing of all records for a given root document
+        in batches (pages) of 100, and write each page to storage.
+    '''
     next_page = True
     resume_after = ''
     write_page = 0
     while next_page:
-        resp = query_nuxeo(root, 'records', 'full', resume_after)
+        resp = query_nuxeo_db_directly(root, 'records', 'listing', resume_after)
         next_page = resp.json().get('isNextPageAvailable')
         resume_after = resp.json().get('resumeAfter')
         records = resp.json().get('entries', [])
@@ -566,7 +579,7 @@ def get_pages_of_child_components(record: dict):
     resume_after = ''
     components = []
     while next_page:
-        resp = query_nuxeo(record, 'records', 'full', resume_after)
+        resp = query_nuxeo_db_directly(record, 'records', 'listing', resume_after)
         next_page = resp.json().get('isNextPageAvailable')
         resume_after = resp.json().get('resumeAfter')
         records = resp.json().get('entries', [])
@@ -588,7 +601,8 @@ def get_pages_of_child_components(record: dict):
     return pages
 
 
-def query_nuxeo(root: dict, doc_type: str, results_type: str, resume_after: str):
+def query_nuxeo_db_directly(root: dict, doc_type: str, results_type: str, resume_after: str):
+    ''' Use the nuxeo cdl_dbquery lambda to fetch nuxeo records from the db '''
     payload = {
         'uid': root['uid'],
         'doc_type': doc_type,
