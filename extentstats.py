@@ -487,8 +487,13 @@ def hit_nuxeo_api(uid):
         "X-Authentication-Token": NUXEO_API_TOKEN
         }
     request = {'url': url, 'headers': headers}
-    response = requests.get(**request)
-    response.raise_for_status()
+    try:
+        response = HTTP_SESSION.get(**request)
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        print(f"Unable to fetch page {request}")
+        raise(e)
+
     json_resp = response.json()
     return json_resp
 
