@@ -39,7 +39,7 @@ def configure_http_session() -> requests.Session:
     http = requests.Session()
     retry_strategy = Retry(
         total=3,
-        backoff_factor=2,
+        backoff_factor=6,
         status_forcelist=[413, 429, 500, 502, 503, 504]
     )
     adapter = HTTPAdapter(max_retries=retry_strategy)
