@@ -664,7 +664,13 @@ def main(params):
             version = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
             path = f"/asset-library/{campus}"
             uid = get_nuxeo_uid_for_path(path)
-            for folder in fetch_folders({'uid': uid}):
+            root_folder = {
+                'uid': uid,
+                'path': path,
+                'parent_uid': ''
+            }
+            for folder in [root_folder] + fetch_folders({'uid': uid}):
+                print(folder.get("path"))
                 fetch_records(folder, campus, version)
 
         print("Aggregating data")
