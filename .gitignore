@@ -2,7 +2,7 @@ env
 __pycache__/
 env.local
 output/
-.venv/
+*env/
 .DS_Store
 .python-version
 OLD/
