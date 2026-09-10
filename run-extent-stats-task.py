@@ -12,6 +12,10 @@ def main(args):
         campus = args.campus
     if args.version:
         command.extend(["--version", args.version])
+    if args.use_folder_list:
+        command.extend(["--use_folder_list"])
+    if args.use_registry_endpoints:
+        command.extend(["--use_registry_endpoints"])
 
     # assume we"re running this in the pad-dsc-admin account for now
     cluster = "nuxeo"
@@ -65,6 +69,9 @@ if __name__ == "__main__":
     top_folder.add_argument("--all", help="create reports for all campuses", action="store_true")
     top_folder.add_argument("--campus", help="single campus")
     parser.add_argument("--version", help="Metadata version. If not provided, metadata will be fetched from S3.")
+    folder_source = parser.add_mutually_exclusive_group(required=False)
+    folder_source.add_argument('--use_folder_list', help="Provide stats for specified folders", action="store_true")
+    folder_source.add_argument('--use_registry_endpoints', help="Provide stats for collection endpoints as recorded in the registry", action="store_true")
 
     args = parser.parse_args()
     (main(args))
