@@ -17,6 +17,7 @@ CAMPUSES = os.environ.get('CAMPUSES')
 METADATA = os.environ.get('NUXEO_EXTENT_STATS_METADATA')
 REPORTS = os.environ.get('NUXEO_EXTENT_STATS_REPORTS')
 TEMP = os.environ.get('NUXEO_EXTENT_STATS_LOCAL_TEMPDIR')
+FOLDERS = os.environ.get('NUXEO_EXTENT_STATS_FOLDERS')
 
 NUXEO_DBQUERY_URL = os.environ['NUXEO_DBQUERY_URL']
 NUXEO_DBQUERY_TOKEN = os.environ['NUXEO_DBQUERY_TOKEN']
@@ -176,20 +177,110 @@ def get_campus_folders_from_storage(campus, version):
 
     return folders
 
+def get_curated_folder_list(campus, version):
+    folder_data = parse_data_uri(FOLDERS)
+
+    folders = []
+    if folder_data.store == 'file':
+        filepath = os.path.join(folder_data.path, campus, version, f"{campus}-folderlist-curated.txt")
+        with open(filepath, "r") as f:
+            for line in f.readlines():
+                nuxeo_path = line.strip()
+                nuxeo_path = nuxeo_path.removeprefix(f"/asset-library/{campus}/")
+                dir = os.path.join(DATA.path, campus, version, nuxeo_path)
+                folders.append(dir)
+    elif folder_data.store == 's3':
+        s3_client = boto3.client('s3')
+        prefix = folder_data.path
+        prefix = prefix.lstrip('/')
+        prefix = f"{prefix}/{version}"
+        key = f"{prefix}/{campus}-folderlist-curated.txt"
+
+        response = s3_client.get_object(
+            Bucket=folder_data.bucket,
+            Key=key
+        )
+        for line in response['Body'].iter_lines():
+            nuxeo_path = line.decode('utf-8')
+            nuxeo_path = nuxeo_path.removeprefix(f"/asset-library/{campus}/")
+            s3_folder = f"{DATA.path.lstrip('/')}/{campus}/{version}/{nuxeo_path}"
+            folders.append(s3_folder)
+    else:
+        raise Exception(f"Unknown data scheme: {folder_data.store}")
+
+    return folders
+
+def get_folders_from_registry(campus, version):
+    folders = []
+
+    limit = 100
+    next_page_available = True
+    offset = 0
+    while next_page_available:
+        url = (
+            f"https://registry.cdlib.org/api/v1/collection"
+                "?harvest_type=NUX"
+                "&format=json"
+                f"&limit={limit}"
+                f"&offset={offset}"
+                f"&username={os.environ.get('REGISTRY_USERNAME')}"
+                f"&api_key={os.environ.get('REGISTRY_API_KEY')}"
+        )
+        response = requests.get(
+            url=url
+        )
+        response.raise_for_status()
+        page = response.json()
+
+        for collection in page.get("objects"):
+            if collection.get("campus"):
+                campus_slug = collection.get("campus")[0].get("slug")
+                if campus_slug == campus:
+                    harvest_extra_data = collection.get("harvest_extra_data")
+                    if harvest_extra_data:
+                        nuxeo_path = harvest_extra_data.strip().strip("/")
+                        nuxeo_path = nuxeo_path.removeprefix(f"asset-library/{campus}/")
+
+                        if DATA.store == 'file':
+                            dir = os.path.join(DATA.path, campus, version, nuxeo_path)
+                            if dir not in folders:
+                                folders.append(dir)
+                        elif DATA.store == 's3':
+                            s3_folder = f"{DATA.path.lstrip('/')}/{campus}/{version}/{nuxeo_path}"
+                            if s3_folder not in folders:
+                                folders.append(s3_folder)
+
+        if page.get("meta").get("next"):
+            offset += limit
+        else:
+            next_page_available = False
+
+    return folders
+
 MD5S = []
-def create_extent_report(campus, version):
+def create_extent_report(campus, version, curated_folder_list, use_registry_endpoints):
     '''
     for a given campus:
         - get metadata files for campus from S3
         - parse out file stats metadata
         - create spreadsheet of stats
+        - default is to aggregate stats per each folder under /asset-library/{campus}.
+            If `curated_folder_list` is True, then aggregate stats for each of those
+            folders instead
+            If `use_registry_endpoints` is True, then aggregate stats by collection,
+            where each folder is the harvest endpoint stored in the registry
     '''
 
     # create the excel excel_workbook
     tmp_dir = TEMP
     if not os.path.exists(tmp_dir):
         os.makedirs(tmp_dir)
-    excel_file_name = f"{campus}-extent-stats-{version}.xlsx"
+    if curated_folder_list:
+        excel_file_name = f"{campus}-curated-extent-stats-{version}.xlsx"
+    elif use_registry_endpoints:
+        excel_file_name = f"{campus}-registry-endpoints-extent-stats-{version}.xlsx"
+    else:
+        excel_file_name = f"{campus}-extent-stats-{version}.xlsx"
     excel_file_path = os.path.join(tmp_dir, excel_file_name)
     excel_workbook = xlsxwriter.Workbook(excel_file_path)
     bold_format = excel_workbook.add_format({'bold': True})
@@ -221,7 +312,12 @@ def create_extent_report(campus, version):
     row += 1
 
     # create a file to contain a list of all docs for QA purposes
-    doclist_file_name = f"{campus}-doclist-{version}.txt"
+    if curated_folder_list:
+        doclist_file_name = f"{campus}-curated-doclist-{version}.txt"
+    elif use_registry_endpoints:
+        doclist_file_name = f"{campus}-registry-endpoints-doclist-{version}.txt"
+    else:
+        doclist_file_name = f"{campus}-doclist-{version}.txt"
     doclist_file_path = os.path.join(tmp_dir, doclist_file_name)
     if os.path.exists(doclist_file_path):
         os.remove(doclist_file_path)
@@ -240,13 +336,18 @@ def create_extent_report(campus, version):
         "total_size": 0
     }
 
-    folders = get_campus_folders_from_storage(campus, version)
+    if curated_folder_list:
+        folders = get_curated_folder_list(campus, version)
+    elif use_registry_endpoints:
+        folders = get_folders_from_registry(campus, version)
+    else:
+        folders = get_campus_folders_from_storage(campus, version)
 
     for folder in folders:
         print(f"Aggregating stats for {folder}")
         stats = get_stats(campus, version, folder)
 
-        rowname = folder.split('/')[-1]
+        rowname = folder.removeprefix(f"{DATA.path.removeprefix('/')}/{campus}/{version}/")
         write_stats(stats, summary_worksheet, row, rowname)
         row += 1
 
@@ -340,8 +441,7 @@ def get_stats(campus, version, folder):
             Prefix=folder
         )
         for page in pages:
-            for item in page['Contents']:
-                #print(f"getting s3 object: {item['Key']}")
+            for item in page.get('Contents', []):
                 response = s3_client.get_object(
                     Bucket=data.bucket,
                     Key=item['Key']
@@ -668,7 +768,7 @@ def main(params):
                 fetch_records(folder, campus, version)
 
         print("Aggregating data")
-        create_extent_report(campus, version)
+        create_extent_report(campus, version, params.use_folder_list, params.use_registry_endpoints)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="create nuxeo extent stats report(s)")
@@ -676,6 +776,9 @@ if __name__ == "__main__":
     top_folder.add_argument('--all', help="create reports for all campuses", action="store_true")
     top_folder.add_argument('--campus', help="single campus")
     parser.add_argument('--version', help="Metadata version. If provided, metadata will be fetched from S3.")
+    folder_source = parser.add_mutually_exclusive_group(required=False)
+    folder_source.add_argument('--use_folder_list', help="Provide stats for specified folders", action="store_true")
+    folder_source.add_argument('--use_registry_endpoints', help="Provide stats for collection endpoints as recorded in the registry", action="store_true")
 
     args = parser.parse_args()
     sys.exit(main(args))
