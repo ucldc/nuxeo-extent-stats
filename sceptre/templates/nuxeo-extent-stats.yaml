@@ -29,6 +29,11 @@ Parameters:
     Type: String
   NuxeoDbQueryUrl:
     Type: String
+  RegistryUsername:
+    Type: String
+  RegistryApiKey:
+    Type: String
+
 Resources:
   NuxeoExtentStatsCodeBuildRole:
     Type: AWS::IAM::Role
@@ -277,5 +282,9 @@ Resources:
               Value: !Ref NuxeoDbQueryToken
             - Name: NUXEO_DBQUERY_URL
               Value: !Ref NuxeoDbQueryUrl
+            - Name: REGISTRY_USERNAME
+              Value: !Ref RegistryUsername
+            - Name: REGISTRY_API_KEY
+              Value: !Ref RegistryApiKey
           LinuxParameters:
             InitProcessEnabled: true
