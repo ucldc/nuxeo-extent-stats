@@ -14,3 +14,5 @@ parameters:
   NuxeoApiUrl: "https://nuxeo.cdlib.org/nuxeo/site/api/v1"
   NuxeoDbQueryToken: !environment_variable NUXEO_DBQUERY_TOKEN
   NuxeoDbQueryUrl: "https://nuxeo.cdlib.org/cdl_dbquery"
+  RegistryUsername: !environment_variable REGISTRY_USERNAME
+  RegistryApiKey: !environment_variable REGISTRY_API_KEY

@@ -31,6 +31,22 @@ To run the reports for all campuses (this will take a very long time! UCM and UC
 ```
 python run-extent-stats-task.py --all
 ```
+Full usage:
+
+```
+usage: run-extent-stats-task.py [-h] (--all | --campus CAMPUS) [--version VERSION] [--use_folder_list | --use_registry_endpoints]
+
+create nuxeo extent stats report(s)
+
+options:
+  -h, --help            show this help message and exit
+  --all                 create reports for all campuses
+  --campus CAMPUS       single campus
+  --version VERSION     Metadata version. If not provided, metadata will be fetched from S3.
+  --use_folder_list     Provide stats for specified folders
+  --use_registry_endpoints
+                        Provide stats for collection endpoints as recorded in the registry
+```
 
 The script will output the ARN of the ECS task that was launched, e.g.:
 
