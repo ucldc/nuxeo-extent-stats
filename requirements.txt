@@ -3,3 +3,4 @@ boto3
 XlsxWriter
 humanize
 pytz
+opensearch-py
