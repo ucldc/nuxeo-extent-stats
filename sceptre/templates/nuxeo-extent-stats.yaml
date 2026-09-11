@@ -33,7 +33,12 @@ Parameters:
     Type: String
   RegistryApiKey:
     Type: String
-
+  OpenSearchHost:
+    Type: String
+  OpenSearchUser:
+    Type: String
+  OpenSearchPass:
+    Type: String
 Resources:
   NuxeoExtentStatsCodeBuildRole:
     Type: AWS::IAM::Role
@@ -286,5 +291,12 @@ Resources:
               Value: !Ref RegistryUsername
             - Name: REGISTRY_API_KEY
               Value: !Ref RegistryApiKey
+            - Name: RIKOLTI_OPENSEARCH_HOST
+              Value: !Ref OpenSearchHost
+            - Name: RIKOLTI_OPENSEARCH_USER
+              Value: !Ref OpenSearchUser
+            - Name: RIKOLTI_OPENSEARCH_PASS
+              Value: !Ref OpenSearchPass
+
           LinuxParameters:
             InitProcessEnabled: true

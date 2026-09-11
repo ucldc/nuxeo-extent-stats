@@ -16,3 +16,6 @@ parameters:
   NuxeoDbQueryUrl: "https://nuxeo.cdlib.org/cdl_dbquery"
   RegistryUsername: !environment_variable REGISTRY_USERNAME
   RegistryApiKey: !environment_variable REGISTRY_API_KEY
+  OpenSearchHost: !environment_variable RIKOLTI_OPENSEARCH_HOST
+  OpenSearchUser: !environment_variable RIKOLTI_OPENSEARCH_USER
+  OpenSearchPass: !environment_variable RIKOLTI_OPENSEARCH_PASS
