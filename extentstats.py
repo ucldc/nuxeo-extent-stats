@@ -7,6 +7,7 @@ import shutil
 
 import boto3
 import humanize
+from opensearchpy import OpenSearch
 import requests
 from requests.adapters import HTTPAdapter, Retry
 from urllib.parse import quote, urlparse
@@ -175,7 +176,7 @@ def get_campus_folders_from_storage(campus, version):
     else:
         raise Exception(f"Unknown data scheme: {data.store}")
 
-    return folders
+    return [{"path": folder} for folder in folders]
 
 def get_curated_folder_list(campus, version):
     folder_data = parse_data_uri(FOLDERS)
@@ -188,7 +189,7 @@ def get_curated_folder_list(campus, version):
                 nuxeo_path = line.strip()
                 nuxeo_path = nuxeo_path.removeprefix(f"/asset-library/{campus}/")
                 dir = os.path.join(DATA.path, campus, version, nuxeo_path)
-                folders.append(dir)
+                folders.append({"path": dir})
     elif folder_data.store == 's3':
         s3_client = boto3.client('s3')
         prefix = folder_data.path
@@ -204,11 +205,56 @@ def get_curated_folder_list(campus, version):
             nuxeo_path = line.decode('utf-8')
             nuxeo_path = nuxeo_path.removeprefix(f"/asset-library/{campus}/")
             s3_folder = f"{DATA.path.lstrip('/')}/{campus}/{version}/{nuxeo_path}"
-            folders.append(s3_folder)
+            folders.append({"path": s3_folder})
     else:
         raise Exception(f"Unknown data scheme: {folder_data.store}")
 
     return folders
+
+def get_opensearch_collection_data(collection_id):
+    # query opensearch
+    host = os.environ.get("RIKOLTI_OPENSEARCH_HOST")
+    auth = (os.environ.get("RIKOLTI_OPENSEARCH_USER"), os.environ.get("RIKOLTI_OPENSEARCH_PASS"))
+
+    client = OpenSearch(
+        hosts=[{"host": host, "port": 443}],
+        http_auth=auth,
+        http_compress=True,  # enables gzip compression for request bodies
+        use_ssl=True,
+        verify_certs=True,
+        ssl_assert_hostname=False,
+        ssl_show_warn=False,
+    )
+
+    query = {
+        "query": {
+            "bool": {
+                "must": [
+                    {"match": {"collection_url": collection_id}}
+                ]
+            }
+        },
+        "_source": [
+            "mapper_type"
+        ],
+        "size": 1,
+        "track_total_hits": True  
+        }
+
+    response = client.search(
+        body = query,
+        index = 'rikolti-prd'
+    )
+
+    prod_total = response.get("hits", {}).get("total", {}).get("value")
+    if prod_total:
+        mapper_type = response.get("hits").get("hits")[0].get("_source").get("mapper_type")[0]
+    else:
+        mapper_type = None
+    return {
+        "prod_total": prod_total,
+        "mapper_type": mapper_type
+    }
 
 def get_folders_from_registry(campus, version):
     folders = []
@@ -233,22 +279,28 @@ def get_folders_from_registry(campus, version):
         page = response.json()
 
         for collection in page.get("objects"):
+            collection_id = collection.get("id")
             if collection.get("campus"):
                 campus_slug = collection.get("campus")[0].get("slug")
                 if campus_slug == campus:
                     harvest_extra_data = collection.get("harvest_extra_data")
                     if harvest_extra_data:
+                        opensearch_data = get_opensearch_collection_data(collection_id)
+
                         nuxeo_path = harvest_extra_data.strip().strip("/")
                         nuxeo_path = nuxeo_path.removeprefix(f"asset-library/{campus}/")
 
                         if DATA.store == 'file':
-                            dir = os.path.join(DATA.path, campus, version, nuxeo_path)
-                            if dir not in folders:
-                                folders.append(dir)
+                            storage_path = os.path.join(DATA.path, campus, version, nuxeo_path)
                         elif DATA.store == 's3':
-                            s3_folder = f"{DATA.path.lstrip('/')}/{campus}/{version}/{nuxeo_path}"
-                            if s3_folder not in folders:
-                                folders.append(s3_folder)
+                            storage_path = f"{DATA.path.lstrip('/')}/{campus}/{version}/{nuxeo_path}"
+
+                        folders.append({
+                            "collection_id": collection_id,
+                            "path": storage_path,
+                            "calisphere_count": opensearch_data.get("prod_total"),
+                            "mapper_type": opensearch_data.get("mapper_type")
+                        })
 
         if page.get("meta").get("next"):
             offset += limit
@@ -287,20 +339,31 @@ def create_extent_report(campus, version, curated_folder_list, use_registry_endp
     summary_worksheet = excel_workbook.add_worksheet('Summary')
 
     # write the headings
-    headings = [
-        "Project Folder",
-        "Doc Count",
-        "Unique Main File Count",
-        "Main File Size",
-        "Unique Files Tab Count",
-        "Files Tab Count",
-        "Unique Aux File Count",
-        "Aux File Size",
-        "Unique Derivative File Count",
-        "Derivative File Size",
-        "Total Unique File Count",
-        "Total File Size"
-    ]
+    headings = ["Project Folder"]
+    if use_registry_endpoints:
+        headings.extend(
+            [
+                "Collection ID",
+                "Calisphere Count",
+                "Mapper Type"
+            ]
+        )
+    headings.extend(
+        [
+            "Doc Count",
+            "Unique Main File Count",
+            "Main File Size",
+            "Unique Files Tab Count",
+            "Files Tab Count",
+            "Unique Aux File Count",
+            "Aux File Size",
+            "Unique Derivative File Count",
+            "Derivative File Size",
+            "Total Unique File Count",
+            "Total File Size"
+        ]
+    )
+
     row = 0
     col = 0
     for h in (headings):
@@ -347,8 +410,11 @@ def create_extent_report(campus, version, curated_folder_list, use_registry_endp
         print(f"Aggregating stats for {folder}")
         stats = get_stats(campus, version, folder)
 
-        rowname = folder.removeprefix(f"{DATA.path.removeprefix('/')}/{campus}/{version}/")
-        write_stats(stats, summary_worksheet, row, rowname)
+        rowname = folder["path"].removeprefix(f"{DATA.path.removeprefix('/')}/{campus}/{version}/")
+        if use_registry_endpoints:
+            write_stats(stats, summary_worksheet, row, rowname, folder.get("collection_id"), folder.get("calisphere_count"), folder.get("mapper_type"))
+        else:
+            write_stats(stats, summary_worksheet, row, rowname)
         row += 1
 
         if not os.path.exists(doclist_file_path):
@@ -375,7 +441,10 @@ def create_extent_report(campus, version, curated_folder_list, use_registry_endp
     summary_stats['doc_count'] = summary_doc_count
 
     rowname = 'TOTALS'
-    write_stats(summary_stats, summary_worksheet, row, rowname)
+    if use_registry_endpoints:
+        write_stats(summary_stats, summary_worksheet, row, rowname, "--", "--", "--")
+    else:
+        write_stats(summary_stats, summary_worksheet, row, rowname)
 
     excel_workbook.close()
 
@@ -425,7 +494,7 @@ def get_stats(campus, version, folder):
 
     data = parse_data_uri(METADATA)
     if data.store == 'file':
-        metadata_dir = os.path.join(data.path, campus, version, folder)
+        metadata_dir = os.path.join(data.path, campus, version, folder["path"])
         for root, dirs, files in os.walk(metadata_dir):
             for file in files:
                 filepath = os.path.join(root, file)
@@ -438,7 +507,7 @@ def get_stats(campus, version, folder):
         paginator = s3_client.get_paginator('list_objects_v2')
         pages = paginator.paginate(
             Bucket=data.bucket,
-            Prefix=folder
+            Prefix=folder["path"]
         )
         for page in pages:
             for item in page.get('Contents', []):
@@ -597,22 +666,28 @@ def hit_nuxeo_api(uid):
     json_resp = response.json()
     return json_resp
 
-def write_stats(stats, worksheet, rownum, rowname):
+def write_stats(stats, worksheet, rownum, rowname, collection_id=None, calisphere_count=0, mapper_type=None):
 
-    formatted_data = [
-        rowname,
-        stats['doc_count'],
-        stats['main_count'],
-        humanize.naturalsize(stats['main_size'], binary=True),
-        stats['filetab_count'],
-        humanize.naturalsize(stats['filetab_size'], binary=True),
-        stats['aux_count'],
-        humanize.naturalsize(stats['aux_size'], binary=True),
-        stats['deriv_count'],
-        humanize.naturalsize(stats['deriv_size'], binary=True),
-        stats['total_count'],
-        humanize.naturalsize(stats['total_size'], binary=True)
-    ]
+    formatted_data = [rowname]
+
+    if collection_id:
+        formatted_data.extend([collection_id, calisphere_count, mapper_type])
+
+    formatted_data.extend(
+        [
+            stats['doc_count'],
+            stats['main_count'],
+            humanize.naturalsize(stats['main_size'], binary=True),
+            stats['filetab_count'],
+            humanize.naturalsize(stats['filetab_size'], binary=True),
+            stats['aux_count'],
+            humanize.naturalsize(stats['aux_size'], binary=True),
+            stats['deriv_count'],
+            humanize.naturalsize(stats['deriv_size'], binary=True),
+            stats['total_count'],
+            humanize.naturalsize(stats['total_size'], binary=True)
+        ]
+    )
 
     col = 0
     for d in (formatted_data):
@@ -765,7 +840,7 @@ def main(params):
             path = f"/asset-library/{campus}"
             uid = get_nuxeo_uid_for_path(path)
             for folder in fetch_folders({'uid': uid}):
-                fetch_records(folder, campus, version)
+                fetch_records(folder["folder"], campus, version)
 
         print("Aggregating data")
         create_extent_report(campus, version, params.use_folder_list, params.use_registry_endpoints)
