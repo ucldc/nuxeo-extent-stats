@@ -183,7 +183,7 @@ def get_curated_folder_list(campus, version):
 
     folders = []
     if folder_data.store == 'file':
-        filepath = os.path.join(folder_data.path, campus, version, f"{campus}-folderlist-curated.txt")
+        filepath = os.path.join(folder_data.path, f"{campus}-folderlist-curated.txt")
         with open(filepath, "r") as f:
             for line in f.readlines():
                 nuxeo_path = line.strip()
@@ -194,7 +194,6 @@ def get_curated_folder_list(campus, version):
         s3_client = boto3.client('s3')
         prefix = folder_data.path
         prefix = prefix.lstrip('/')
-        prefix = f"{prefix}/{version}"
         key = f"{prefix}/{campus}-folderlist-curated.txt"
 
         response = s3_client.get_object(
