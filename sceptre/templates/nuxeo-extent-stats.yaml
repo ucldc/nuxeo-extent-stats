@@ -21,6 +21,8 @@ Parameters:
     Type: String
   TempDir:
     Type: String
+  FolderListUri:
+    Type: String
   NuxeoApiToken:
     Type: String
   NuxeoApiUrl:
@@ -279,6 +281,8 @@ Resources:
               Value: !Ref ReportsUri
             - Name: NUXEO_EXTENT_STATS_LOCAL_TEMPDIR
               Value: !Ref TempDir
+            - Name: NUXEO_EXTENT_STATS_FOLDERS
+              Value: !Ref FolderListUri
             - Name: NUXEO_API_TOKEN
               Value: !Ref NuxeoApiToken
             - Name: NUXEO_API_URL
