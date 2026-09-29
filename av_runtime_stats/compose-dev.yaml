@@ -1,0 +1,14 @@
+# compose file for dev purposes
+services:
+  avruntime:
+    image: avstats
+    pull_policy: never
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+      tags:
+        - avstats
+    env_file: env.docker
+    entrypoint: ["tail", "-f", "/dev/null"]
+    volumes:
+      - ./av_runtime_stats.py:/nuxeo-extent-stats/av_runtime_stats/av_runtime_stats.py
