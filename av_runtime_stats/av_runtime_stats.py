@@ -161,6 +161,11 @@ def get_campuses():
 
     return campuses
 
+def humanize_duration(seconds):
+    min, sec = divmod(seconds, 60)
+    hour, min = divmod(min, 60)
+    return '%dh%02dm%02ds' % (hour, min, sec)
+
 def get_stats(campus):
     stats = {}
     no_duration = []
@@ -212,6 +217,7 @@ def get_stats(campus):
                 {
                     collection_id: {
                         "duration": collection_duration,
+                        "duration_fomatted": humanize_duration(collection_duration),
                         "item_count": collection_item_count
                     }
                 }
@@ -220,6 +226,7 @@ def get_stats(campus):
         campus_duration += collection_duration
 
     stats["total_duration"] = campus_duration
+    stats["total_duration_formatted"] = humanize_duration(campus_duration)
     stats["item_count"] = campus_item_count
     stats["collections"] = collections
 
@@ -249,6 +256,7 @@ def main(params):
         stats[campus_name] = campus_stats
         items_without_duration[campus_name] = campus_items_no_duration
 
+    # write output json to s3
     with open("stats.json", "w") as f:
         f.write(json.dumps(stats))
 
